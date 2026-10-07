@@ -1,0 +1,12 @@
+node_modules/
+coverage/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+.runtime/
+browser-profiles/
+recordings/
+.DS_Store
+Thumbs.db

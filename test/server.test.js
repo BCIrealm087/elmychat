@@ -1,0 +1,35 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { createCoordinatorServer } from '../apps/coordinator/src/server.js';
+
+test('the starter serves its overlay and health without exposing other files', async (t) => {
+  const server = createCoordinatorServer();
+  t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const overlay = await fetch(`${base}/`);
+  assert.equal(overlay.status, 200);
+  assert.match(overlay.headers.get('content-type'), /^text\/html/);
+  assert.match(await overlay.text(), /Native Twitch and YouTube chats are not connected yet/);
+
+  const health = await fetch(`${base}/health`);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { status: 'ok', phase: 'scaffold', chatConnected: false });
+
+  for (const path of ['/package.json', '/AGENTS.md', '/%2e%2e/package.json', '/unknown']) {
+    const missing = await fetch(`${base}${path}`);
+    assert.equal(missing.status, 404);
+    await missing.text();
+  }
+  const post = await fetch(`${base}/health`, { method: 'POST' });
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get('allow'), 'GET, HEAD');
+  await post.text();
+
+  const head = await fetch(`${base}/`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+});

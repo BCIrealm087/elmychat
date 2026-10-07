@@ -1,0 +1,15 @@
+{
+  "name": "elmychat",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Experimental native Twitch and YouTube chat composition for OBS",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node apps/coordinator/src/index.js",
+    "dev": "node --watch apps/coordinator/src/index.js",
+    "test": "node --test",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check": "npm run check:syntax && npm test"
+  }
+}
