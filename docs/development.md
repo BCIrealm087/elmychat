@@ -26,6 +26,8 @@ The bootstrap test starts an ephemeral loopback server and checks the overlay, h
 
 Synthetic browser checks establish browser mechanics, not actual OBS, Twitch/YouTube policies, or live selectors. The operator completed the bounded OBS gate; see [proof evidence and persistence limitations](feasibility-proof.md). The compositor is not wired to native sources yet and adds no new manual gate. Test future adapters with synthetic DOM fixtures, including removal/replacement and style/layout interference. Reserve further live operator checks for critical questions that automated tests cannot answer.
 
+The Twitch browser suite uses `test/fixtures/twitch/source.html` and the actual serialized adapter injection. It exercises discovery, compositor placement and pixel clipping/alpha, delayed native resizing, removal/reuse, style rewrites, session/revision rejection, bounds failures and teardown. The fixture does not reproduce live Twitch. `npm run test:browser` runs this suite alongside the cross-origin proof; CI artifacts include the synthetic Twitch report/screenshot. The static `proof:native` command does not install the continuous adapter.
+
 ## Local state
 
 Future persisted runtime data belongs in `.runtime/`; browser profiles belong in `browser-profiles/`. Both are ignored. No credentials or environment configuration are needed for this scaffold. Keep the HTTP service and future debugging interface on loopback, and avoid operating unrelated browser sessions.

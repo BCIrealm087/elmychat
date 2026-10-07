@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html, body { margin: 0; background: #27272a; }
+.scroll { transform: translateY(35px); contain: paint; overflow: hidden; height: 55px; background: yellow; }
+[data-a-target="chat-line-message"] { padding: 4px; margin: 3px; color: white; background: #c83232; font: 16px/20px sans-serif; }
+.emote { display: inline-block; width: 8px; height: 8px; background: blue; vertical-align: bottom; }
+.chrome { height: 400px; background: yellow; }
+</style></head><body>
+<div class="scroll" style="letter-spacing: 0.2px;">
+  <div data-a-target="chat-line-message" data-id="native-a" style="color: white;"><b>Fixture A</b> <span class="emote"></span></div>
+  <div data-a-target="chat-line-message" data-id="native-b"><b>Fixture B</b> <span>Native synthetic content</span></div>
+</div>
+<div class="chrome">Synthetic chrome, not Twitch markup reproduction.</div>
+<script>
+globalThis.nativeRoots = [...document.querySelectorAll('[data-a-target="chat-line-message"]')];
+globalThis.nativeDescendants = nativeRoots.map(root => [...root.querySelectorAll('*')]);
+globalThis.beforeStyles = [...document.querySelectorAll('*')].map(node => [node, node.getAttribute('style'), node.style.cssText]);
+</script>
+</body></html>

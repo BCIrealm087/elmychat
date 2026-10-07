@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS; the pure compositor core is implemented. The operator confirmed two native messages, transparent spacing and restoration; message persistence was inconsistent. The core now provides arrival order, bottom-aligned rectangles, transparent spacers, clipping and bounded history. It is not yet connected to native sources. Production platform adapters and stable merged chat are not implemented. See [proof evidence and limitations](docs/feasibility-proof.md) and the [compositor contract](packages/compositor/README.md).
+**Status:** bounded native composition proved in OBS; the pure compositor and Twitch text-root adapter are implemented. The adapter observes native roots, reports measurements/removal, applies layout/clipping and restores styles; verification is in progress. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The components are not yet wired into a live merged chat. See [proof evidence and limitations](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), and [Twitch adapter support](packages/adapters/twitch/README.md).
 
 ## Development
 
@@ -28,7 +28,7 @@ The starter overlay contains no platform frames. The separate `/proof?twitch=CHA
 | `apps/coordinator/src/` | Local HTTP entry point; future browser sessions and orchestration |
 | `apps/overlay/` | Transparent page loaded by the OBS Browser Source |
 | `packages/compositor/` | Pure platform-independent ordering, rectangles, spacers, visibility, and bounded history |
-| `packages/adapters/twitch/` | Future Twitch DOM observation and positioning |
+| `packages/adapters/twitch/` | Injected Twitch text-root lifecycle, measurement, positioning, clipping and teardown |
 | `packages/adapters/youtube/` | Future YouTube DOM observation and positioning |
 | `packages/browser-control/` | Scoped CDP target/context access and native one-box probe |
 | `test/` | Automated behavioral tests |
