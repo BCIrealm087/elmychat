@@ -89,7 +89,20 @@ test('managed OBS overlay applies live controls to native frames and replaces on
     await controls.getByText('OBS connection settings', { exact: true }).click();
     await controls.getByLabel('OBS debugging port').fill(String(port));
     await controls.getByRole('button', { name: 'Save and connect' }).click(); await complete(controls, 'Sources saved');
-    async function idle() { await overlay.bringToFront(); await Promise.all(overlay.frames().map((frame) => frame.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))))); }
+    async function idle() {
+      await overlay.bringToFront();
+      const deadline = Date.now() + 12000;
+      while (true) {
+        try {
+          await Promise.all(overlay.frames().map((frame) => frame.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))));
+          return;
+        } catch (error) {
+          // A managed frame can navigate between enumeration and evaluation. Wait
+          // on the current frames; keep unexpected failures and the deadline fatal.
+          if (!/Execution context was destroyed|Frame was detached|frame has been detached/i.test(error.message) || Date.now() >= deadline) throw error;
+        }
+      }
+    }
     async function until(predicate) {
       const deadline = Date.now() + 12000;
       while (Date.now() < deadline) { await operator.tick(); await idle(); if (predicate(operator.health())) return; }
