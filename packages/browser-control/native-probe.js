@@ -5,9 +5,6 @@ export function nativeProbe(options) {
     const state = globalThis[key];
     if (!state || state.token !== options.token) return { restored: false };
     for (const [element, style] of state.styles) {
-      // Clear the live CSS declaration before removing its attribute, so later
-      // CSSOM reads cannot synchronize a stale empty inline attribute back in.
-      element.style.cssText = '';
       if (style === null) element.removeAttribute('style'); else element.setAttribute('style', style);
     }
     delete globalThis[key];
@@ -31,12 +28,17 @@ export function nativeProbe(options) {
   const element = state.element;
   if (options.operation === 'place') {
     const save = (node) => { if (!state.styles.has(node)) state.styles.set(node, node.getAttribute('style')); };
-    for (let node = element.parentElement; node; node = node.parentElement) {
+    const apply = (node, properties) => {
       save(node);
-      for (const [name, value] of Object.entries({ visibility: 'hidden', background: 'transparent', transform: 'none', filter: 'none', perspective: 'none', contain: 'none', overflow: 'visible', opacity: '1' })) node.style.setProperty(name, value, 'important');
+      // Attribute writes preserve the original snapshot without leaving dirty
+      // CSSOM declarations that can re-create an empty attribute on teardown.
+      const declarations = Object.entries(properties).map(([name, value]) => `${name}: ${value} !important;`).join(' ');
+      node.setAttribute('style', `${node.getAttribute('style') ?? ''}; ${declarations}`);
+    };
+    for (let node = element.parentElement; node; node = node.parentElement) {
+      apply(node, { visibility: 'hidden', background: 'transparent', transform: 'none', filter: 'none', perspective: 'none', contain: 'none', overflow: 'visible', opacity: '1' });
     }
-    save(element);
-    for (const [name, value] of Object.entries({ position: 'fixed', top: `${options.y}px`, left: '0px', width: `${options.width}px`, 'box-sizing': 'border-box', margin: '0px', visibility: 'visible', transform: 'none', 'z-index': '2147483647' })) element.style.setProperty(name, value, 'important');
+    apply(element, { position: 'fixed', top: `${options.y}px`, left: '0px', width: `${options.width}px`, 'box-sizing': 'border-box', margin: '0px', visibility: 'visible', transform: 'none', 'z-index': '2147483647' });
   }
   const rect = element.getBoundingClientRect();
   return {
