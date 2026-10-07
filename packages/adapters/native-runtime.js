@@ -29,6 +29,18 @@ function nativeRuntime(options = {}, policy) {
   const decorationStyles = new WeakMap();
   const markerEntries = new WeakMap();
   let markerLayer = null;
+  // Hide outermost native hosts before discovery, including descendants that
+  // explicitly override inherited visibility. Inline placement styles admit
+  // a root only after it has a slot; nested renderers remain native content.
+  const admissionStyle = document.createElement('style');
+  admissionStyle.setAttribute('data-elmychat-admission', platform);
+  decorations.add(admissionStyle);
+  const matched = `:is(${selector})`;
+  const admissionRule = `${containerSelector ? `${containerSelector} ` : ''}${matched}:not(${matched} ${matched}) { opacity: 0 !important; transition: none !important; animation: none !important; }`;
+  function ensureAdmissionStyle() {
+    if (admissionStyle.textContent !== admissionRule) admissionStyle.textContent = admissionRule;
+    if (admissionStyle.parentNode !== document.head) document.head.append(admissionStyle);
+  }
   const counts = { added: 0, removed: 0, resized: 0, styleRepairs: 0, flushes: 0 };
   const parseStyle = (raw) => { const node = document.createElement('div'); node.setAttribute('style', raw ?? ''); return node.style; };
   const address = (entry) => ({ sourceId, sessionId, messageId: entry.messageId });
@@ -162,6 +174,7 @@ function nativeRuntime(options = {}, policy) {
     for (const node of [...styles.keys()]) restoreStyle(node);
     markerLayer?.remove();
     markerLayer = null;
+    admissionStyle.remove();
     roots.clear();
     recycled.clear();
     reports.clear();
@@ -193,13 +206,20 @@ function nativeRuntime(options = {}, policy) {
     if (visible) {
       const { rect, clip: area } = placement;
       const x = rect.x + entry.gutter;
-      const offsets = [area.y - rect.y, x + messageWidth(entry) - area.x - area.width, rect.y + rect.height - area.y - area.height, area.x - x].map((value) => Math.max(0, value));
-      clip = `inset(${offsets.map((value) => `${value}px`).join(' ')})`;
+      const left = Math.max(0, area.x - x);
+      const right = Math.max(left, Math.min(messageWidth(entry), area.x + area.width - x));
+      const top = Math.max(0, area.y - rect.y);
+      const bottom = Math.max(top, area.y + area.height - rect.y);
+      // Absolute coordinates bound paint to the last assigned slot even when
+      // auto-height grows before remeasurement. Relative bottom insets expand
+      // with the native box and can paint across the next message or spacer.
+      clip = `polygon(${left}px ${top}px, ${right}px ${top}px, ${right}px ${bottom}px, ${left}px ${bottom}px)`;
     }
     return {
       position: 'fixed', top: `${placement?.rect.y ?? 0}px`, left: `${(placement?.rect.x ?? 0) + entry.gutter}px`,
       width: `${messageWidth(entry)}px`, height: 'auto', 'min-width': '0', 'max-width': 'none', 'min-height': '0', 'max-height': 'none',
       'box-sizing': 'border-box', margin: '0', visibility: visible ? 'visible' : 'hidden',
+      opacity: visible ? '1' : '0', transition: 'none', animation: 'none',
       transform: 'none', 'z-index': '2147483647', 'clip-path': clip,
     };
   }
@@ -209,6 +229,7 @@ function nativeRuntime(options = {}, policy) {
     if (status !== 'running') return;
     try {
       counts.flushes += 1;
+      ensureAdmissionStyle();
       const containers = containerSelector ? [...document.querySelectorAll(containerSelector)] : [document];
       if (containers.length > 1) throw new Error('ambiguous-message-container');
       const container = containers[0];
@@ -277,6 +298,10 @@ function nativeRuntime(options = {}, policy) {
     if (records.length > 10_000) { terminate('mutation-batch-limit'); return; }
     let dirty = false;
     for (const record of records) {
+      if (record.target === admissionStyle || admissionStyle.contains(record.target)) {
+        if (admissionStyle.textContent !== admissionRule) dirty = true;
+        continue;
+      }
       if (decorations.has(record.target)) {
         // Own writes stay idle; repair foreign removal/style writes without
         // treating any decoration as a native message-content replacement.
@@ -285,7 +310,7 @@ function nativeRuntime(options = {}, policy) {
         continue;
       }
       if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => decorations.has(node))) {
-        if (markerLayer && !markerLayer.isConnected) dirty = true;
+        if ((markerLayer && !markerLayer.isConnected) || !admissionStyle.isConnected) dirty = true;
         continue;
       }
       if (record.type === 'attributes' && record.attributeName === 'style' && styles.get(record.target)?.applied === record.target.getAttribute('style')) continue;
@@ -303,7 +328,18 @@ function nativeRuntime(options = {}, policy) {
         }
       }
     }
-    if (dirty) schedule();
+    if (dirty) {
+      try {
+        // Mutation observers run before paint. Reused content must not briefly
+        // inherit the old identity's slot while discovery waits for a frame.
+        for (const entry of roots.values()) if (recycled.has(entry.node) || nativeKeyFor(entry.node) !== entry.nativeKey) {
+          entry.placement = null;
+          applyStyle(entry.node, rootProperties(entry));
+          positionMarker(entry);
+        }
+        schedule();
+      } catch (error) { terminate(error.message); }
+    }
   });
   function onPageHide() { terminate('pagehide'); }
 
@@ -338,7 +374,11 @@ function nativeRuntime(options = {}, policy) {
       if (!pixel(command.width, true)) throw new RangeError('Measurement width must be positive.');
       if (width !== command.width) {
         width = command.width;
-        for (const entry of roots.values()) entry.placement = null;
+        for (const entry of roots.values()) {
+          entry.placement = null;
+          applyStyle(entry.node, rootProperties(entry));
+          positionMarker(entry);
+        }
         schedule();
       }
       return { accepted: true };
@@ -367,8 +407,11 @@ function nativeRuntime(options = {}, policy) {
           clip: placement.visible ? { x: placement.clip.x, y: placement.clip.y, width: placement.clip.width, height: placement.clip.height } : null,
         } : null;
       }
-      schedule();
-      return { accepted: true };
+      // Commit this complete snapshot in one task. The acknowledgment means
+      // positions are written, rather than merely queued for another frame.
+      if (frame !== null) cancelAnimationFrame(frame);
+      flush();
+      return { accepted: true, status, failure };
     },
     retireMessages(command) {
       const denial = commandAllowed(command);
@@ -381,6 +424,8 @@ function nativeRuntime(options = {}, policy) {
           entry.retired = true;
           counts.removed += 1;
           entry.placement = null;
+          applyStyle(entry.node, rootProperties(entry));
+          positionMarker(entry);
           resizer.unobserve(entry.node);
         }
         schedule();
@@ -395,6 +440,7 @@ function nativeRuntime(options = {}, policy) {
     },
   });
   globalThis[key] = api;
+  ensureAdmissionStyle();
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: [...new Set(['style', 'class', 'hidden', ...identityAttributes, ...policy.selectorAttributes])] });
   window.addEventListener('pagehide', onPageHide);
   window.addEventListener('resize', schedule);

@@ -186,6 +186,42 @@ test('failure between draining reports and applying layouts is latched and healt
   await runtime.stop();
 });
 
+test('a slow source cannot postpone the other source snapshot; cycles and shutdown remain bounded', async () => {
+  const { page, runtime } = await attached();
+  page.publish(1, 'added', 'a'); page.publish(2, 'added', 'b');
+  const call = page.call.bind(page);
+  let release;
+  const gate = new Promise(done => { release = done; });
+  let entered;
+  const bothStarted = new Promise(done => { entered = done; });
+  const started = [];
+  let pending = 0;
+  let peak = 0;
+  page.call = async (context, platform, method, command) => {
+    if (method !== 'applyPlacements') return call(context, platform, method, command);
+    pending += 1; peak = Math.max(peak, pending); started.push(platform);
+    if (started.length === 2) entered();
+    try {
+      if (platform === 'twitch') await gate;
+      return await call(context, platform, method, command);
+    } finally { pending -= 1; }
+  };
+  const cycle = runtime.step();
+  assert.equal(runtime.step(), cycle);
+  try {
+    await Promise.race([bothStarted, new Promise((_, reject) => {
+      const timer = setTimeout(() => reject(new Error('Second source waited for the first source acknowledgment.')), 1000);
+      timer.unref();
+    })]);
+    assert.deepEqual(started, ['twitch', 'youtube']);
+    assert.equal(peak, 2);
+    assert.equal(page.calls.filter(c => c.method === 'applyPlacements' && c.platform === 'youtube').at(-1).command.placements[0].messageId, 'b');
+  } finally { release(); await cycle; }
+  assert.equal(pending, 0);
+  await runtime.stop();
+  assert.ok(runtime.diagnostics().cleanup.every(c => c.restored));
+});
+
 test('loading documents wait and recover in the same context without latching or disrupting Twitch', async () => {
   const page = new Page();
   const context = page.frames[2].context;

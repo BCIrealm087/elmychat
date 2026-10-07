@@ -272,21 +272,30 @@ export class NativeCoordinator {
       for (let pass = 0; pass < 2; pass += 1) {
         let failed = false;
         const layout = this.compositor.layout();
+        const writes = [];
         for (const [sourceId, record] of this.#records) {
           if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
           const placements = layout.placements.filter((entry) => entry.sourceId === sourceId && entry.sessionId === record.sessionId);
           const snapshot = JSON.stringify(placements);
           if (snapshot !== record.snapshot) {
-            try {
-              await this.#command(record, 'applyPlacements', { revision: ++record.revision, placements });
-              record.snapshot = snapshot;
-              this.#activity.layoutWrites += 1;
-            } catch (error) {
-              failed = true;
-              this.#blocked.set(sourceId, { context: record.context, reason: error.message });
-              await this.#retire(sourceId, error.message);
-              this.#sourceStates.set(sourceId, { status: 'failed', reason: error.message });
-            }
+            writes.push({ sourceId, record, snapshot, placements });
+          }
+        }
+        // At most two source writes. Dispatch the same snapshot together so a
+        // slow frame does not postpone the other frame's placement request.
+        const results = await Promise.allSettled(writes.map(({ record, placements }) =>
+          this.#command(record, 'applyPlacements', { revision: ++record.revision, placements })));
+        for (const [index, result] of results.entries()) {
+          const { sourceId, record, snapshot } = writes[index];
+          if (result.status === 'fulfilled') {
+            record.snapshot = snapshot;
+            this.#activity.layoutWrites += 1;
+          } else {
+            failed = true;
+            const reason = result.reason.message;
+            this.#blocked.set(sourceId, { context: record.context, reason });
+            await this.#retire(sourceId, reason);
+            this.#sourceStates.set(sourceId, { status: 'failed', reason });
           }
         }
         if (!failed) break;
