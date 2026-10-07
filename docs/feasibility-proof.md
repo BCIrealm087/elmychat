@@ -11,14 +11,18 @@ This is deliberately a static pair diagnostic. It does not observe live arrivals
 | Question | Verification | Status |
 | --- | --- | --- |
 | Scoped command routing, disconnect rejection, explicit target selection, and context retirement | Node behavioral tests | Passed locally |
-| Cross-origin access without disabling web security | Synthetic Chromium frames with different sites | Automated browser test implemented; execution pending |
-| Separate iframe sessions and multiple contexts on one session | Two browser isolation modes, with assertions on actual session types | Automated browser tests implemented; execution pending |
-| Original root/descendant identity and native paint through overlapping frames | DOM identity checks and screenshot pixel checks | Automated browser tests implemented; execution pending |
-| Arbitrary transparent spacing and removal of surrounding chrome | Check every pixel of the 120px gap and sample native message/background pixels | Automated browser test implemented; execution pending |
-| Style restoration | Check original inline attributes after teardown | Automated browser test implemented; execution pending |
+| Cross-origin access without disabling web security | Synthetic Chromium frames with different sites | Passed in Linux and Windows CI |
+| Separate iframe sessions and multiple contexts on one session | Two browser isolation modes, with assertions on actual session types | Passed in Linux and Windows CI |
+| Original root/descendant identity and native paint through overlapping frames | DOM identity checks and screenshot pixel checks | Passed in Linux and Windows CI |
+| Arbitrary transparent spacing and removal of surrounding chrome | Check every pixel of the 120px gap and sample native message/background pixels | Passed in Linux and Windows CI |
+| Style restoration | Compare original inline attributes/declarations after teardown, including existing inline styles | Passed in Linux and Windows CI |
 | Actual Twitch/YouTube embedding, selectors, OBS/CEF target support and final scene alpha | Native pair in the intended OBS version | Unverified; critical live gate |
 
-The local browser installer initially returned HTML instead of the Chromium ZIP. The exact pinned Chrome build was retrieved from official Chrome storage, but this execution container denies the Unix socket used by Chromium's process singleton (`socket() failed: Operation not permitted`), preventing browser launch. No browser test is skipped or called successful because of that environment problem. CI installs the pinned Playwright browser and runs the same tests on Linux and Windows; record its results before handing over the native gate.
+Recorded automated evidence: [CI run 37565575785](https://github.com/BCIrealm087/elmychat/actions/runs/37565575785), commit `96d3a31`, passed all four protocol/HTTP tests and both browser tests on Linux and Windows on 2026-10-07 UTC. The run includes per-platform JSON reports and screenshots. The browser is Chrome for Testing `153.0.8010.12`, CDP `1.3`, driven by pinned Playwright `1.63.0` with Node 22. The Linux report records a 420x600 viewport, two 66px-high boxes at y=12 and y=198, and exactly 120px of transparent gap. Both isolation modes assert their actual attachment types before passing.
+
+The local browser installer initially returned HTML instead of the Chromium ZIP. The exact pinned Chrome build was retrieved from official Chrome storage, but this execution container denies the Unix socket used by Chromium's process singleton (`socket() failed: Operation not permitted`), preventing browser launch. No browser test was skipped or called successful because of that environment problem; rendering evidence comes from CI.
+
+The first CI runs caught empty `style` attributes returning after CSSOM-based temporary edits, even though the CSS declarations were cleared. The probe now applies attribute snapshots instead, and restoration checks compare both original attributes and declarations. Original roots and descendants remain intact throughout.
 
 ## Automated commands
 

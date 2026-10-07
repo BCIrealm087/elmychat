@@ -4,7 +4,7 @@
 
 - Work only in `BCIrealm087/elmychat` and on `codex-startup` unless the user explicitly changes the target.
 - Before editing, committing, or pushing, check the repository and branch. Never create or update `main`, another branch, or the Elmybot repository as a workaround.
-- The empty repository has no base history. Its first commit belongs on `codex-startup`.
+- The repository was initialized directly on `codex-startup`. Continue its existing history on this branch.
 - Push ordinary completed work to this branch when authorized by the task. Do not merge, create a release, or change repository settings without a request.
 
 ## Product direction
