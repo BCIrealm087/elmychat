@@ -1,6 +1,6 @@
 # Operator controls
 
-Step 6 adds a local controls page, saved source settings, and live gap/spacer controls. Automated browser/CI verification is pending. The bounded native OBS gate from step 5 remains valid; this step introduces no repeat manual gate. Live special-root and prolonged-use limits remain unchanged.
+Step 6 adds a local controls page, saved source settings, and live gap/spacer controls. Windows/Linux [CI run 37635603023](https://github.com/BCIrealm087/elmychat/actions/runs/37635603023), commit `f509b9d`, passed all 38 Node and 23 browser tests on each OS with no skipped tests. The bounded native OBS gate from step 5 remains valid; this step introduces no repeat manual gate. Live special-root and prolonged-use limits remain unchanged.
 
 ## Start and configure
 

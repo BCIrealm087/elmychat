@@ -40,4 +40,4 @@ Use focused commits and update status documentation with substantive behavior ch
 
 The coordinator browser suite runs the complete real-CDP pipeline in both OOPIF and shared-context modes. See [coordinator contracts and limits](coordinator.md); it adds `.runtime/proof/coordinator*.json/png` to CI artifacts.
 
-Step 6 adds source configuration and live spacing controls. See [operator workflow and persistence/API contracts](operator-controls.md). The control/UI and managed-overlay browser suites add responsive page artifacts and verify the actual controls-to-CDP pipeline with intercepted synthetic native fixtures. No repeat human gate is required.
+Step 6 adds source configuration and live spacing controls. Windows/Linux [CI run 37635603023](https://github.com/BCIrealm087/elmychat/actions/runs/37635603023) passed all 38 Node and 23 browser tests on each OS. See [operator workflow and persistence/API contracts](operator-controls.md). The control/UI and managed-overlay browser suites add responsive page artifacts and verify the actual controls-to-CDP pipeline with intercepted synthetic native fixtures. No repeat human gate is required.
