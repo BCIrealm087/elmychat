@@ -16,13 +16,23 @@ This is deliberately a static pair diagnostic. It does not observe live arrivals
 | Original root/descendant identity and native paint through overlapping frames | DOM identity checks and screenshot pixel checks | Passed in Linux and Windows CI |
 | Arbitrary transparent spacing and removal of surrounding chrome | Check every pixel of the 120px gap and sample native message/background pixels | Passed in Linux and Windows CI |
 | Style restoration | Compare original inline attributes/declarations after teardown, including existing inline styles | Passed in Linux and Windows CI |
-| Actual Twitch/YouTube embedding, selectors, OBS/CEF target support and final scene alpha | Native pair in the intended OBS version | Unverified; critical live gate |
+| Actual Twitch/YouTube embedding, text selectors, OBS/CEF target support and final scene alpha | Operator report, native JSON and screenshot on Windows | Passed for the bounded static pair; persistence remains unresolved |
 
 Recorded automated evidence: [CI run 37565575785](https://github.com/BCIrealm087/elmychat/actions/runs/37565575785), commit `96d3a31`, passed all four protocol/HTTP tests and both browser tests on Linux and Windows on 2026-10-07 UTC. The run includes per-platform JSON reports and screenshots. The browser is Chrome for Testing `153.0.8010.12`, CDP `1.3`, driven by pinned Playwright `1.63.0` with Node 22. The Linux report records a 420x600 viewport, two 66px-high boxes at y=12 and y=198, and exactly 120px of transparent gap. Both isolation modes assert their actual attachment types before passing.
 
 The local browser installer initially returned HTML instead of the Chromium ZIP. The exact pinned Chrome build was retrieved from official Chrome storage, but this execution container denies the Unix socket used by Chromium's process singleton (`socket() failed: Operation not permitted`), preventing browser launch. No browser test was skipped or called successful because of that environment problem; rendering evidence comes from CI.
 
 The first CI runs caught empty `style` attributes returning after CSSOM-based temporary edits, even though the CSS declarations were cleared. The probe now applies attribute snapshots instead, and restoration checks compare both original attributes and declarations. Original roots and descendants remain intact throughout.
+
+## Native OBS observation — 2026-10-07
+
+The operator reported using the latest OBS on Windows; an exact OBS version number was not supplied. The native report identifies embedded Chromium as `Chrome/127.0.6533.120`, CDP `1.3`. Both sources attached through `iframe-target` sessions with 800x600 document viewports. The text selectors matched native roots and the immediate placement checks retained the selected nodes and descendants.
+
+Twitch measured 783x49.59375 and was placed at y=12 with width 800. YouTube measured 783x32 and was placed at y=181.59375 with width 800, giving the requested 120px gap. The report returned `geometry-passed`. The operator saw both messages with the scene Color Source showing through; the supplied screenshot also shows two native message presentations over the green source with clear space between them. Ctrl+C restored the original layout.
+
+Persistence was inconsistent across repeated probes: the second message commonly disappeared after about one second; the first sometimes remained or disappeared after roughly 5–10 seconds. Other attempts lost both messages or briefly showed only one. The probe applies styles once and performs no ongoing observation or repair. Its initial node-identity checks do not establish later survival. Native node removal/replacement, subsequent style/layout changes, or other lifecycle behavior are possible explanations, not a diagnosed cause.
+
+**Step 1 is complete for its bounded capability question:** native frame access, immediate positioning, rendered transparency and explicit restoration work in the tested environment. This does not establish a stable merged chat. Message lifetime, rerender interference, and ongoing visibility remain unresolved requirements for the platform adapters and coordinator (steps 3–5), which should gain automated lifecycle diagnostics/tests. Repeating this unchanged static probe is not required. Residual chrome such as the bottom scrollbar visible in the screenshot also remains adapter work; the proof is not a finished overlay.
 
 ## Automated commands
 

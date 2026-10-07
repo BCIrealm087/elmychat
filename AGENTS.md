@@ -12,7 +12,7 @@
 - Preserve native Twitch and YouTube message rendering. Keep each message inside the document that owns it.
 - Keep platform selectors and DOM manipulation in the corresponding adapter. Keep the compositor independent of platform HTML.
 - Support native message measurements, a unified arrival order, and arbitrary transparent spacers.
-- Treat native OBS/CEF composition as unproven until the feasibility milestone has evidence. A browser mock does not establish OBS compatibility.
+- Native OBS/CEF static composition has operator evidence in `docs/feasibility-proof.md`. Preserve the distinction between that bounded capability and unproved ongoing stability; a browser mock does not establish additional OBS compatibility.
 - Read `docs/architecture.md` and `docs/roadmap.md` before changing the architecture. Update relevant documentation when behavior or decisions change.
 - Elmychat is independent of Elmybot. Do not introduce a dependency on its APIs or credentials without a concrete requirement.
 
@@ -31,4 +31,4 @@
 
 ## Current state
 
-The local server, transparent native-proof page, scoped CDP/context transport, and one-pair native measurement/placement diagnostic are implemented. A synthetic Chromium harness exercises isolated-frame and shared-session paths. Production platform adapters and compositor are not implemented. See `docs/feasibility-proof.md` for evidence and the remaining OBS/native-platform gate. No license choice, installer, OAuth workflow, or real chat integration has been made.
+The local server, transparent native-proof page, scoped CDP/context transport, and one-pair native measurement/placement diagnostic are implemented. Synthetic Chromium tests passed on Windows/Linux, and the operator confirmed native OBS composition, scene alpha and restoration. Step 1 is complete for static capability; inconsistent message persistence remains unresolved adapter/coordinator work. Production platform adapters and compositor are not implemented. See `docs/feasibility-proof.md` for evidence and limits. Step 2 is next. No license choice, installer, OAuth workflow, or production chat integration has been made.
