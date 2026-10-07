@@ -24,6 +24,8 @@ export async function runSyntheticProof({ sameProcess = false } = {}) {
     await page.goto(fixtures.targetUrl);
     await page.frameLocator('#first').locator('.message').waitFor();
     await page.frameLocator('#second').locator('.message').waitFor();
+    const nativeFrames = page.frames().filter((frame) => frame !== page.mainFrame());
+    const beforeStyles = await Promise.all(nativeFrames.map((frame) => frame.evaluate(() => [...document.querySelectorAll('*')].map((node) => ({ tag: node.tagName, inline: node.getAttribute('style'), css: node.style.cssText })))));
     const debugPort = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0];
     const blocked = await page.evaluate(() => {
       try { document.querySelector('iframe').contentWindow.document.body; return false; } catch (error) { return error.name === 'SecurityError'; }
@@ -38,6 +40,10 @@ export async function runSyntheticProof({ sameProcess = false } = {}) {
       assert.equal(await frame.evaluate(() => document.querySelector('.message') === originalMessage && originalChildren.every((node) => originalMessage.contains(node))), true);
     }
     const bytes = await page.screenshot({ omitBackground: true });
+    const output = resolve('.runtime/proof');
+    await mkdir(output, { recursive: true });
+    const name = sameProcess ? 'synthetic-same-process' : 'synthetic';
+    await writeFile(join(output, `${name}.png`), bytes);
     const png = PNG.sync.read(bytes);
     const pixel = (x, y) => [...png.data.subarray((Math.floor(y) * png.width + x) * 4, (Math.floor(y) * png.width + x) * 4 + 4)];
     assert.deepEqual(pixel(2, first.y + 2), [200, 50, 50, 255], 'Lower iframe native message must paint through the upper transparent iframe.');
@@ -47,7 +53,8 @@ export async function runSyntheticProof({ sameProcess = false } = {}) {
     const cleanup = await proof.restore();
     assert.ok(cleanup.every((item) => item.restored));
     proof = undefined;
-    for (const frame of page.frames().filter((f) => f !== page.mainFrame())) assert.equal(await frame.evaluate(() => document.querySelectorAll('[style]').length), 0, 'Original inline styles must be restored.');
+    const afterStyles = await Promise.all(nativeFrames.map((frame) => frame.evaluate(() => [...document.querySelectorAll('*')].map((node) => ({ tag: node.tagName, inline: node.getAttribute('style'), css: node.style.cssText })))));
+    assert.deepEqual(afterStyles, beforeStyles, 'Original inline styles must be restored.');
     report.status = 'synthetic-rendering-passed';
     report.sameOriginRestrictionPreserved = true;
     report.transparentGapVerifiedByPixels = true;
@@ -55,9 +62,6 @@ export async function runSyntheticProof({ sameProcess = false } = {}) {
     report.stylesRestored = true;
     report.environment = { browser: context.browser().version(), platform: process.platform, mode: sameProcess ? 'same-process-requested' : 'site-per-process' };
     report.limitations.push('Synthetic documents, not Twitch/YouTube or OBS/CEF.');
-    const output = resolve('.runtime/proof');
-    await mkdir(output, { recursive: true });
-    const name = sameProcess ? 'synthetic-same-process' : 'synthetic';
     await writeFile(join(output, `${name}.json`), JSON.stringify(report, null, 2) + '\n');
     await writeFile(join(output, `${name}.png`), bytes);
     return report;
