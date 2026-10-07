@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS; the pure compositor and Twitch text-root adapter are implemented. The adapter observes native roots, reports measurements/removal, applies layout/clipping and restores styles; verification is in progress. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The components are not yet wired into a live merged chat. See [proof evidence and limitations](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), and [Twitch adapter support](packages/adapters/twitch/README.md).
+**Status:** bounded native composition proved in OBS; the pure compositor and Twitch text-root adapter are implemented and CI-verified on Windows/Linux. The adapter observes native roots, reports measurements/removal, applies layout/clipping and restores styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The components are not yet wired into a live merged chat; Twitch special rows are unsupported. See [proof evidence and limitations](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), and [Twitch adapter support](packages/adapters/twitch/README.md).
 
 ## Development
 

@@ -2,7 +2,7 @@
 
 ## Objective and status
 
-Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and injected Twitch text-root adapter are implemented. The adapter's verification is in progress; the YouTube adapter and production coordinator wiring remain unimplemented. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
+Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and injected Twitch text-root adapter are implemented. The adapter's synthetic lifecycle tests passed on Windows/Linux; the YouTube adapter and production coordinator wiring remain unimplemented. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
 
 The observed OBS environment exposes both native frames as CDP iframe targets and can render the static pair over a scene source. That bounded result does not establish support across OBS builds or continued rerenders. CDP transports access; the compositor computes layout; future adapters maintain native presentation.
 
