@@ -1,6 +1,6 @@
 # Native coordinator
 
-Step 5 connects the two native adapters to the compositor through the selected OBS Browser Source's CDP socket. The parent page never reads cross-origin chat DOM, copies HTML or recreates messages. The first full Windows/Linux integration run passed ([37620376202](https://github.com/BCIrealm087/elmychat/actions/runs/37620376202)); final failure-isolation and connected-root/ownership coverage is awaiting its follow-up run. Continuous live OBS behavior remains unverified.
+Step 5 connects the two native adapters to the compositor through the selected OBS Browser Source's CDP socket. The parent page never reads cross-origin chat DOM, copies HTML or recreates messages. All 26 Node tests and 21 browser tests passed on both Windows and Linux in [CI run 37620747140](https://github.com/BCIrealm087/elmychat/actions/runs/37620747140), including late failure isolation, connected-root eviction and foreign owner checks. Continuous live OBS behavior remains unverified.
 
 ## Run
 

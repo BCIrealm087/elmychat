@@ -2,7 +2,7 @@
 
 ## Objective and status
 
-Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and both injected adapters are implemented. YouTube supports synthetic policies for text and five special-root candidates; its tests and shared-lifecycle Twitch regressions passed on Windows/Linux. The step 5 coordinator now wires reports, layouts and source generations; its automated browser verification is pending. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
+Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and both injected adapters are implemented. YouTube supports synthetic policies for text and five special-root candidates; its tests and shared-lifecycle Twitch regressions passed on Windows/Linux. The step 5 coordinator now wires reports, layouts and source generations; its automated browser verification passed on Windows/Linux. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
 
 The observed OBS environment exposes both native frames as CDP iframe targets and can render the static pair over a scene source. That bounded result does not establish support across OBS builds or continued rerenders. CDP transports access; the compositor computes layout; adapters maintain native presentation.
 
@@ -55,7 +55,7 @@ The core bounds retained history (messages and spacers together) and active sour
 4. Does external positioning survive native rerenders, asynchronous sizing, special messages, and node recycling?
 5. How does refresh, source unload, scene change, and context replacement affect recovery?
 
-The first milestone answered the first three for the tested static pair. Questions 4–5 now have automated adapter/coordinator coverage pending CI, but continuous native OBS evidence remains open, including the observed short, inconsistent message lifetime. Compositor tests establish data/layout behavior, not native DOM stability.
+The first milestone answered the first three for the tested static pair. Questions 4–5 now have passing automated adapter/coordinator coverage on Windows/Linux, but continuous native OBS evidence remains open, including the observed short, inconsistent message lifetime. Compositor tests establish data/layout behavior, not native DOM stability.
 
 ## Reference starting points
 

@@ -4,7 +4,7 @@
 
 The tool discovers one explicitly selected local debugging target, finds the two source document contexts, measures one visible message in each, and positions the original native roots with a 120px transparent gap. It leaves native descendants in their owning document and does not copy HTML or recreate message rendering. Ctrl+C restores the inline styles changed by the probe and disconnects without closing OBS or navigating the source.
 
-This is deliberately a static pair diagnostic. It does not observe live arrivals, implement global ordering, handle continued rerenders/resizes, provide a settings UI, or replace the future platform adapters/compositor.
+This is deliberately a static pair diagnostic. It does not observe live arrivals, implement global ordering, handle continued rerenders/resizes, provide a settings UI, or run the platform adapters/compositor.
 
 ## Evidence and status
 
@@ -33,6 +33,12 @@ Twitch measured 783x49.59375 and was placed at y=12 with width 800. YouTube meas
 Persistence was inconsistent across repeated probes: the second message commonly disappeared after about one second; the first sometimes remained or disappeared after roughly 5–10 seconds. Other attempts lost both messages or briefly showed only one. The probe applies styles once and performs no ongoing observation or repair. Its initial node-identity checks do not establish later survival. Native node removal/replacement, subsequent style/layout changes, or other lifecycle behavior are possible explanations, not a diagnosed cause.
 
 **Step 1 is complete for its bounded capability question:** native frame access, immediate positioning, rendered transparency and explicit restoration work in the tested environment. This does not establish a stable merged chat. Message lifetime, rerender interference, and ongoing visibility remain unresolved requirements for the platform adapters and coordinator (steps 3–5), which should gain automated lifecycle diagnostics/tests. Repeating this unchanged static probe is not required. Residual chrome such as the bottom scrollbar visible in the screenshot also remains adapter work; the proof is not a finished overlay.
+
+## Step 5 automated integration — 2026-10-07
+
+The continuous coordinator is implemented separately from this static probe. [CI run 37620747140](https://github.com/BCIrealm087/elmychat/actions/runs/37620747140), commit `fb83caa`, passed 26 Node tests and 21 browser tests on both Windows and Linux. Both real-CDP isolation modes verified reports-to-layout routing, original roots/descendants, native paint and every gap pixel, delayed resize, viewport remeasurement, removal, frame navigation, socket reconnection, page refresh, iframe unload/recreation, connected-root history retirement, foreign coordinator ownership isolation and exact reachable-document teardown restoration. `coordinator*.json/png` are included with the existing CI artifacts.
+
+This is synthetic Chromium evidence. It does not diagnose the observed short native OBS message lifetime or establish continuous live platform compatibility. The [coordinator setup and one bounded persistence/refresh check](coordinator.md) are ready; that critical native gate remains open. No repeat of the unchanged static probe is required.
 
 ## Automated commands
 
