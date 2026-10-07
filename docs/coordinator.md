@@ -1,6 +1,6 @@
 # Native coordinator
 
-Step 5 connects the two native adapters to the compositor through the selected OBS Browser Source's CDP socket. The parent page never reads cross-origin chat DOM, copies HTML or recreates messages. Ordinary Node checks currently pass; the new browser integration suite is awaiting Windows/Linux CI. Continuous live OBS behavior remains unverified.
+Step 5 connects the two native adapters to the compositor through the selected OBS Browser Source's CDP socket. The parent page never reads cross-origin chat DOM, copies HTML or recreates messages. The first full Windows/Linux integration run passed ([37620376202](https://github.com/BCIrealm087/elmychat/actions/runs/37620376202)); final failure-isolation and connected-root/ownership coverage is awaiting its follow-up run. Continuous live OBS behavior remains unverified.
 
 ## Run
 
@@ -37,6 +37,6 @@ Native root removal remains authoritative: the coordinator does not archive or f
 
 ## Verification and critical native gate
 
-Eight Node coordinator tests cover reports, stale sessions, evictions, viewport invalidation, ambiguity, failures, reconnect selection and shutdown during injection. Two real-CDP browser tests exercise isolated iframe targets and shared page contexts, original native nodes, all transparent gap pixels, delayed native size, viewport changes, removal, source navigation, socket reconnection, top-page refresh, frame unload/recreation and exact style restoration. CI artifacts include `coordinator*.json/png` alongside prior proofs. These use synthetic fixtures, not actual Twitch/YouTube or OBS.
+Nine Node coordinator tests cover reports, stale sessions, evictions, viewport invalidation, ambiguity, failures, reconnect selection and shutdown during injection. Two real-CDP browser tests exercise isolated iframe targets and shared page contexts, original native nodes, all transparent gap pixels, delayed native size, viewport changes, removal, source navigation, socket reconnection, top-page refresh, frame unload/recreation and exact style restoration, connected-root evictions and foreign coordinator isolation. CI artifacts include `coordinator*.json/png` alongside prior proofs. These use synthetic fixtures, not actual Twitch/YouTube or OBS.
 
 After automated verification, step 5's live acceptance is one bounded check of the previous critical persistence failure: run the continuous coordinator with both live chats for two minutes, confirm new messages remain until naturally removed/evicted, refresh the Browser Source once and confirm resumed composition, then Ctrl+C and confirm restoration. Keep the colored scene background to observe alpha. Record whether a source reports waiting/failed, save the coordinator report before and after shutdown, and note the exact OBS version. No repetition of the old static pair probe is needed. Step 5's live gate remains open until that evidence exists.

@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { NativeCoordinator } from '../../apps/coordinator/src/runtime.js';
 import { NativePage } from '../../packages/browser-control/native-page.js';
 import { startCoordinatorFixtures } from '../../scripts/proof/fixtures.js';
+import { twitchAdapterExpression } from '../../packages/adapters/twitch/index.js';
 
 for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${sameProcess ? 'shared page contexts' : 'isolated iframe targets'}`, { timeout: 60000 }, async () => {
   const fixtures = await startCoordinatorFixtures();
@@ -91,12 +92,28 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
     for (const frame of roots()) {
       assert.equal(await frame.evaluate(() => beforeStyles.every(([node, raw, css]) => node.getAttribute('style') === raw && node.style.cssText === css)), true, 'Current native styles must restore exactly.');
     }
+    runtime = new NativeCoordinator({ ...config, maxEntries: 2 });
+    await until((state) => state.layout.placements.length === 2 && state.layout.placements.every((entry) => entry.sourceId === 'youtube'));
+    for (let i = 0; i < 4; i += 1) { await runtime.step(); await idle(); }
+    assert.equal(runtime.compositor.size, 2, 'Evicted connected roots must not be re-admitted.');
+    const currentTwitch = page.frames().find((frame) => frame.url().startsWith(fixtures.sources[0].urlPrefix));
+    assert.equal(await currentTwitch.evaluate(() => nativeRoots.every((node) => getComputedStyle(node).visibility === 'hidden')), true);
+    await runtime.stop();
+    await currentTwitch.evaluate(twitchAdapterExpression({ sourceId: 'foreign', sessionId: 'foreign-generation', width: 300 }));
+    runtime = new NativeCoordinator(config);
+    await until((state) => state.sources[0].status === 'failed' && state.sources[1].status === 'running');
+    assert.match(runtime.diagnostics().sources[0].reason, /another coordinator/);
+    await runtime.stop();
+    assert.equal(await currentTwitch.evaluate(() => __elmychatTwitchAdapterV1.diagnostics().sessionId), 'foreign-generation');
+    assert.equal(await currentTwitch.evaluate(() => __elmychatTwitchAdapterV1.diagnostics().status), 'running');
+    await currentTwitch.evaluate(() => __elmychatTwitchAdapterV1.stop({ sourceId: 'foreign', sessionId: 'foreign-generation' }));
+    for (const frame of roots()) assert.equal(await frame.evaluate(() => beforeStyles.every(([node, raw, css]) => node.getAttribute('style') === raw && node.style.cssText === css)), true);
     const output = resolve('.runtime/proof'); await mkdir(output, { recursive: true });
     const name = sameProcess ? 'coordinator-same-process' : 'coordinator';
     await writeFile(join(output, `${name}.png`), bytes);
     await writeFile(join(output, `${name}.json`), JSON.stringify({
       kind: 'synthetic-coordinator-proof', status: 'passed', environment: { browser: context.browser().version(), platform: process.platform, frameTypes },
-      checks: ['reports-to-layout', 'transparent-gap-pixels', 'native-node-identity', 'delayed-resize', 'viewport-remeasurement', 'removal', 'frame-navigation', 'socket-reconnect', 'page-refresh', 'iframe-unload', 'teardown-restoration'],
+      checks: ['reports-to-layout', 'transparent-gap-pixels', 'native-node-identity', 'delayed-resize', 'viewport-remeasurement', 'removal', 'frame-navigation', 'socket-reconnect', 'page-refresh', 'iframe-unload', 'teardown-restoration', 'connected-root-eviction', 'foreign-owner-isolation'],
       initialLayout: initial.layout, finalLayout, cleanup: stopped.cleanup,
       limitations: ['Synthetic documents and Chromium; continuous live OBS/platform behavior remains unverified.'],
     }, null, 2) + '\n');

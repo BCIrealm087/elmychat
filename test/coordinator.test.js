@@ -167,3 +167,21 @@ test('overlapping ticks coalesce and shutdown waits for an in-flight installatio
   assert.equal(runtime.diagnostics().status, 'stopped');
   assert.equal(page.disconnected, true);
 });
+
+test('failure between draining reports and applying layouts is latched and healthy geometry updates', async () => {
+  const { page, runtime } = await attached();
+  page.publish(1, 'added', 'a'); page.publish(2, 'added', 'b');
+  const call = page.call.bind(page);
+  page.call = async (context, platform, method, command) => {
+    if (platform === 'youtube' && method === 'applyPlacements') return { accepted: false, reason: 'inactive' };
+    return call(context, platform, method, command);
+  };
+  await runtime.step();
+  assert.deepEqual(runtime.compositor.entries().map((e) => e.messageId), ['a']);
+  const twitch = page.calls.filter((c) => c.method === 'applyPlacements' && c.platform === 'twitch').at(-1);
+  assert.equal(twitch.command.placements[0].rect.y + 28, 600);
+  assert.equal(runtime.diagnostics().sources[1].status, 'failed');
+  const installs = page.installs;
+  await runtime.step(); assert.equal(page.installs, installs);
+  await runtime.stop();
+});

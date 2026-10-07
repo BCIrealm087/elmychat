@@ -186,17 +186,39 @@ export class NativeCoordinator {
       }
       for (const [sourceId, ids] of retired) {
         const record = this.#records.get(sourceId);
-        if (record) await this.#command(record, 'retireMessages', { messageIds: [...ids] });
-      }
-      const layout = this.compositor.layout();
-      for (const [sourceId, record] of this.#records) {
-        const placements = layout.placements.filter((entry) => entry.sourceId === sourceId && entry.sessionId === record.sessionId);
-        const snapshot = JSON.stringify(placements);
-        if (snapshot !== record.snapshot) {
-          await this.#command(record, 'applyPlacements', { revision: ++record.revision, placements });
-          record.snapshot = snapshot;
+        if (record) {
+          try { await this.#command(record, 'retireMessages', { messageIds: [...ids] }); }
+          catch (error) {
+            this.#blocked.set(sourceId, { context: record.context, reason: error.message });
+            await this.#retire(sourceId, error.message);
+            this.#sourceStates.set(sourceId, { status: 'failed', reason: error.message });
+          }
         }
       }
+      // A failure while applying a snapshot also retires that source. One extra
+      // bounded pass updates any healthy source already sent the previous layout.
+      for (let pass = 0; pass < 2; pass += 1) {
+        let failed = false;
+        const layout = this.compositor.layout();
+        for (const [sourceId, record] of this.#records) {
+          if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
+          const placements = layout.placements.filter((entry) => entry.sourceId === sourceId && entry.sessionId === record.sessionId);
+          const snapshot = JSON.stringify(placements);
+          if (snapshot !== record.snapshot) {
+            try {
+              await this.#command(record, 'applyPlacements', { revision: ++record.revision, placements });
+              record.snapshot = snapshot;
+            } catch (error) {
+              failed = true;
+              this.#blocked.set(sourceId, { context: record.context, reason: error.message });
+              await this.#retire(sourceId, error.message);
+              this.#sourceStates.set(sourceId, { status: 'failed', reason: error.message });
+            }
+          }
+        }
+        if (!failed) break;
+      }
+      if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
       this.#lastError = null;
     } catch (error) {
       this.#lastError = error.message;

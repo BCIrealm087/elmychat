@@ -37,3 +37,15 @@ test('the starter serves its overlay and health without exposing other files', a
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
 });
+
+test('native route and health expose current coordinator state', async (t) => {
+  let state = { status: 'waiting', chatConnected: false };
+  const server = createCoordinatorServer({ health: () => state });
+  t.after(() => new Promise((done) => server.close(done)));
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.match(await (await fetch(`${base}/native?twitch=example&youtube=abcdefghijk`)).text(), /www.twitch.tv/);
+  assert.deepEqual(await (await fetch(`${base}/health`)).json(), state);
+  state = { status: 'connected', chatConnected: true };
+  assert.deepEqual(await (await fetch(`${base}/health`)).json(), state);
+});
