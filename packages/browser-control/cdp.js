@@ -83,6 +83,7 @@ export class CdpConnection extends EventEmitter {
   }
 
   #fail(message) {
+    if (this.#closed) return;
     this.#closed = true;
     for (const pending of this.#pending.values()) { clearTimeout(pending.timer); pending.reject(new Error(message)); }
     this.#pending.clear();
@@ -130,7 +131,7 @@ export class FrameContexts {
       for (const [key, context] of this.contexts) if (context.sessionId === retired) this.contexts.delete(key);
     } else if (method === 'Target.attachedToTarget') {
       if (params.targetInfo.type !== 'iframe') return;
-      const work = this.#enable(params.sessionId).catch((error) => this.errors.push(error.message));
+      const work = this.#enable(params.sessionId).catch((error) => { this.errors.splice(0, Math.max(0, this.errors.length - 15)); this.errors.push(error.message); });
       this.#work.add(work);
       work.finally(() => this.#work.delete(work));
     }

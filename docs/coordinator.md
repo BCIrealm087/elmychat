@@ -1,0 +1,42 @@
+# Native coordinator
+
+Step 5 connects the two native adapters to the compositor through the selected OBS Browser Source's CDP socket. The parent page never reads cross-origin chat DOM, copies HTML or recreates messages. Ordinary Node checks currently pass; the new browser integration suite is awaiting Windows/Linux CI. Continuous live OBS behavior remains unverified.
+
+## Run
+
+Keep the OBS debugging setup that worked for the static proof. Do not run the static probe and coordinator concurrently. Stop the existing `npm start` server before starting this configured instance.
+
+Copy `docs/coordinator.example.json` to `.runtime/coordinator.json`. Replace the channel/video placeholders in `targetUrl` with the real values; retain the URL's exact query order. If identical Browser Sources exist, use `targetId` from `npm run proof:targets` instead. The coordinator pins that ID after its first connection and will not attach to a replacement target ID automatically.
+
+```sh
+npm ci
+npm start -- .runtime/coordinator.json
+```
+
+Use the matching `http://127.0.0.1:3210/native?twitch=CHANNEL&youtube=VIDEO_ID` in the OBS Browser Source. `/native` uses the same native embed surface as `/proof`; `/proof` remains supported for the static diagnostic. Starting the coordinator before OBS opens the page is supported: it waits for the selected existing target. It never opens, navigates or closes an OBS page or restarts OBS. Source/platform accounts remain native browser sessions.
+
+`http://127.0.0.1:3210/health` exposes current source sessions, failures, measured rectangles and cleanup outcomes. `.runtime/proof/coordinator-report.json` is refreshed approximately every two seconds and again on Ctrl+C. It contains geometry and local identities, not message text, cookies or credentials. Ctrl+C waits for current work, restores reachable source styles and closes its socket/server.
+
+## Lifecycle contract
+
+Each serialized cycle discovers default worlds, reads the selected top-level viewport, drains Twitch then YouTube in configured order, admits reports and routes full per-source layout snapshots. Default interval is 100ms **after** a completed cycle; slow CDP work cannot accumulate ticks. Native observers still coalesce reports between drains. Initial native roots are admitted in each adapter's discovery order. Cross-source events drained in the same cycle follow configured source order, not an estimate of platform send time. The monotonic compositor sequence persists across source reconnection.
+
+Dimensions/removals carry source and session identity; obsolete generations are dropped. A width change requests native remeasurement and keeps stale measurements hidden. Height changes relayout without resequencing. History evictions explicitly retire connected native roots so they cannot be re-admitted on the next drain. Layouts are sent only when a source's snapshot changes, with increasing revisions. Gap configuration uses the existing compositor; interactive and arbitrary spacer controls remain step 6.
+
+Frame navigation/replacement/unload retires the source generation; a unique matching replacement gets a fresh session. Missing or ambiguous frames wait without choosing one. Adapter failure restores/retire its source and is latched for that document; refreshing that source permits a new attempt. Other healthy sources continue. A missing YouTube scrolling container is reported as waiting while observation remains active.
+
+Socket loss retires compositor identities and reconnects to the pinned target ID. A still-running adapter may be recovered only if its session belongs to this coordinator process's random owner token. A different coordinator's running adapter is left alone and reported as occupied. Navigating the selected page away from its original exact URL suspends operation and restores reachable source styles. Returning that same target to its original URL can recover. Restarting OBS creates new target IDs: restart this coordinator with an explicit new selection.
+
+## Bounds and limits
+
+Exactly two platform sources, up to 32 default frame contexts, 500 tracked roots and 1000 coalesced reports per adapter, 1–500 retained compositor entries, and the last 16 cleanup outcomes. CDP commands have a five-second deadline; work is serial and cannot build a command backlog. Root overflow fails closed and requires a refresh rather than repeatedly reinjecting a failing document. CDP frame-attachment diagnostics are capped at 16.
+
+If a context is destroyed or its socket is unavailable, restoration cannot be confirmed. A disconnected native document may retain its last placement until reconnection restores the old adapter; a new coordinator process cannot take over that live adapter. Refreshing the Browser Source resets the document. This is a known recovery limitation, not proof that abrupt shutdown restores styles. Graceful teardown and same-process reconnection are automated test cases.
+
+Native root removal remains authoritative: the coordinator does not archive or fabricate a message to keep it visible. The prior static probe's disappearing messages are not diagnosed or proved fixed by this implementation. Twitch special rows and YouTube's live special-root/scope/identity compatibility retain their adapter limitations.
+
+## Verification and critical native gate
+
+Eight Node coordinator tests cover reports, stale sessions, evictions, viewport invalidation, ambiguity, failures, reconnect selection and shutdown during injection. Two real-CDP browser tests exercise isolated iframe targets and shared page contexts, original native nodes, all transparent gap pixels, delayed native size, viewport changes, removal, source navigation, socket reconnection, top-page refresh, frame unload/recreation and exact style restoration. CI artifacts include `coordinator*.json/png` alongside prior proofs. These use synthetic fixtures, not actual Twitch/YouTube or OBS.
+
+After automated verification, step 5's live acceptance is one bounded check of the previous critical persistence failure: run the continuous coordinator with both live chats for two minutes, confirm new messages remain until naturally removed/evicted, refresh the Browser Source once and confirm resumed composition, then Ctrl+C and confirm restoration. Keep the colored scene background to observe alpha. Record whether a source reports waiting/failed, save the coordinator report before and after shutdown, and note the exact OBS version. No repetition of the old static pair probe is needed. Step 5's live gate remains open until that evidence exists.

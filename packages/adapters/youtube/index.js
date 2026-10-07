@@ -2,8 +2,10 @@ import { createNativeAdapter } from '../native-runtime.js';
 
 // Text root: live static-proof evidence. Other roots/scope: synthetic candidates,
 // not an assertion of current universal YouTube DOM support.
+export const adapterKey = '__elmychatYouTubeAdapterV1';
+
 export const installYouTubeAdapter = createNativeAdapter({
-  platform: 'youtube', key: '__elmychatYouTubeAdapterV1',
+  platform: 'youtube', key: adapterKey,
   containerSelector: 'yt-live-chat-item-list-renderer #items',
   rootTypes: [
     { selector: 'yt-live-chat-text-message-renderer', kind: 'text' },

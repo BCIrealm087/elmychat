@@ -28,3 +28,27 @@ export async function startFixtures() {
     throw error;
   }
 }
+
+/** Real adapter fixtures in cross-site frames; no copied rendering in the parent. */
+export async function startCoordinatorFixtures() {
+  const templates = await Promise.all(['twitch', 'youtube'].map((platform) => readFile(new URL(`../../test/fixtures/${platform}/source.html`, import.meta.url), 'utf8')));
+  const servers = [];
+  async function serve(html) {
+    const server = createServer((request, response) => { response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); response.end(html); });
+    servers.push(server);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    return server.address().port;
+  }
+  const close = () => Promise.all(servers.map((server) => new Promise((done) => server.close(done))));
+  try {
+    const first = await serve(templates[0]);
+    const second = await serve(templates[1]);
+    const sources = [
+      { id: 'twitch', platform: 'twitch', urlPrefix: `http://first-fixture.test:${first}/chat` },
+      { id: 'youtube', platform: 'youtube', urlPrefix: `http://second-fixture.test:${second}/chat` },
+    ];
+    const overlay = await serve(`<!doctype html><html><head><style>html,body{margin:0;background:transparent;overflow:hidden}iframe{position:absolute;inset:0;border:0;width:100%;height:100%;background:transparent}</style></head><body>${sources.map((source) => `<iframe id="${source.id}" src="${source.urlPrefix}"></iframe>`).join('')}</body></html>`);
+    return { targetUrl: `http://127.0.0.1:${overlay}/`, sources, close };
+  } catch (error) { await close(); throw error; }
+}

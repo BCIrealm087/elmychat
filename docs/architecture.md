@@ -2,9 +2,9 @@
 
 ## Objective and status
 
-Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and both injected adapters are implemented. YouTube supports synthetic policies for text and five special-root candidates; its tests and shared-lifecycle Twitch regressions passed on Windows/Linux. Production coordinator wiring remains unimplemented. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
+Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. The HTTP shell, scoped one-pair CDP probe, pure compositor core and both injected adapters are implemented. YouTube supports synthetic policies for text and five special-root candidates; its tests and shared-lifecycle Twitch regressions passed on Windows/Linux. The step 5 coordinator now wires reports, layouts and source generations; its automated browser verification is pending. The operator confirmed bounded native OBS composition, transparency and restoration. Ongoing live native message survival remains unresolved. See [evidence](feasibility-proof.md).
 
-The observed OBS environment exposes both native frames as CDP iframe targets and can render the static pair over a scene source. That bounded result does not establish support across OBS builds or continued rerenders. CDP transports access; the compositor computes layout; future adapters maintain native presentation.
+The observed OBS environment exposes both native frames as CDP iframe targets and can render the static pair over a scene source. That bounded result does not establish support across OBS builds or continued rerenders. CDP transports access; the compositor computes layout; adapters maintain native presentation.
 
 ## Component boundaries
 
@@ -16,7 +16,7 @@ The observed OBS environment exposes both native frames as CDP iframe targets an
 | Compositor | Serializable rectangles, ordering, spacers, clipping and placement | DOM access, platform HTML or emote rendering |
 | Overlay | Shared viewport and eventual native source surfaces | Cross-origin frame DOM access from ordinary page JavaScript |
 
-Both source documents would occupy the same viewport. Their native message roots remain in their original documents and receive positions from the compositor. A normal parent page cannot directly manipulate cross-origin frame DOM; CDP injection is the proposed access mechanism. Do not disable browser web security as an architectural shortcut.
+Both source documents occupy the same viewport. Their native message roots remain in their original documents and receive positions from the compositor. A normal parent page cannot directly manipulate cross-origin frame DOM; CDP injection is the proposed access mechanism. Do not disable browser web security as an architectural shortcut.
 
 ## Implemented compositor contract
 
@@ -41,11 +41,11 @@ A spacer is a separate bounded entry with a non-negative height. Explicit spacer
 
 Adapters need MutationObserver for message changes and ResizeObserver for delayed native sizing. Measurements must use the shared viewport width. Removing or reusing a native root must retire its old identity. Navigation, frame destruction, and adapter reattachment must invalidate the old source session so stale placements cannot affect replacement nodes.
 
-The Twitch adapter implements that native lifecycle for the observed ordinary-text selector, with bounded coalesced reports and a session-scoped placement API. It repairs supported style rewrites, rejects obsolete layout revisions/widths, and restores attributes on teardown. Native nodes removed by the platform are retired, not archived or recreated. Connected retired roots remain hidden until native removal and count toward the tracking bound. The future coordinator must drain reports, assign receipt time, process evictions, route full source layout snapshots and retire failed source sessions. See the [adapter contract and selector evidence](../packages/adapters/twitch/README.md).
+The Twitch adapter implements that native lifecycle for the observed ordinary-text selector, with bounded coalesced reports and a session-scoped placement API. It repairs supported style rewrites, rejects obsolete layout revisions/widths, and restores attributes on teardown. Native nodes removed by the platform are retired, not archived or recreated. Connected retired roots remain hidden until native removal and count toward the tracking bound. The coordinator drains reports, assigns receipt time, processes evictions, routes full source layout snapshots and retires failed source sessions. See the [adapter contract and selector evidence](../packages/adapters/twitch/README.md).
 
 Both platform modules now supply fixed discovery/type/identity policies to `packages/adapters/native-runtime.js`, sharing only the observer, geometry/style ownership, reports and lifecycle machinery. The Node factory compiles a self-contained injectable function; selectors remain in platform modules and out of the compositor. YouTube restricts discovery to a single scrolling-list container, classifies outermost text/paid/sticker/membership/gift host candidates, and preserves custom-element lifecycle and shadow content. Its `messageKind` report metadata does not change layout policy. Only the YouTube text selector has static live evidence; container, key and special-root policies remain synthetic candidates. See the [YouTube contract and limits](../packages/adapters/youtube/README.md).
 
-The core bounds retained history (messages and spacers together) and active sources, with defaults of 500 entries and 16 sources. It reports evictions/removals for future adapter cleanup. The coordinator still needs to coalesce measurements/placements, bound pending work, and drop obsolete generations. Observe moderation/removal without retaining detached native elements as a hidden archive. Teardown disconnects observers and restores modified styles.
+The core bounds retained history (messages and spacers together) and active sources, with defaults of 500 entries and 16 sources. It reports evictions/removals for adapter cleanup. The coordinator serializes bounded report drains, sends changed layout snapshots, and drops obsolete generations. See the [coordinator contract](coordinator.md) for ordering, reconnect ownership and abrupt-disconnect limits. Observe moderation/removal without retaining detached native elements as a hidden archive. Teardown disconnects observers and restores modified styles.
 
 ## Feasibility questions
 
@@ -55,7 +55,7 @@ The core bounds retained history (messages and spacers together) and active sour
 4. Does external positioning survive native rerenders, asynchronous sizing, special messages, and node recycling?
 5. How does refresh, source unload, scene change, and context replacement affect recovery?
 
-The first milestone answered the first three for the tested static pair. Questions 4–5 remain adapter/coordinator work, including the observed short, inconsistent message lifetime. Compositor tests establish data/layout behavior, not native DOM stability.
+The first milestone answered the first three for the tested static pair. Questions 4–5 now have automated adapter/coordinator coverage pending CI, but continuous native OBS evidence remains open, including the observed short, inconsistent message lifetime. Compositor tests establish data/layout behavior, not native DOM stability.
 
 ## Reference starting points
 
