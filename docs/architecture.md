@@ -49,6 +49,8 @@ Step 6 adds `OperatorController` for persisted source/connection settings, seria
 
 The core bounds retained history (messages and spacers together) and active sources, with defaults of 500 entries and 16 sources. It reports evictions/removals for adapter cleanup. The coordinator serializes bounded report drains, sends changed layout snapshots, and drops obsolete generations. See the [coordinator contract](coordinator.md) for ordering, reconnect ownership and abrupt-disconnect limits. Observe moderation/removal without retaining detached native elements as a hidden archive. Teardown disconnects observers and restores modified styles.
 
+Step 7 adds resource/activity diagnostics, bounded active HTTP control requests, linear report-delivery marking and shutdown cleanup of current-run spacers. Accelerated rolling native fixtures exercise removal, retirement, repeated transport recovery, source-pressure isolation and final restoration. See [hardening and support limits](hardening.md); these bookkeeping bounds do not establish process memory, CPU or prolonged live stability guarantees.
+
 ## Feasibility questions
 
 1. Can the intended OBS/CEF version expose the selected Browser Source and both native frame contexts through CDP?

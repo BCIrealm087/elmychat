@@ -59,6 +59,6 @@ Abrupt coordinator termination cannot run teardown; refresh the Browser Source t
 
 ## Distribution decision for this milestone
 
-Recommendation: retain the current source-checkout workflow and defer packaged releases and license selection. The application runs through Node.js 22+ and `npm start`; runtime modules use Node built-ins. Playwright and PNG parsing remain development-only verification dependencies. `package.json` stays private; no installer, executable bundle, npm publication, release or license file is introduced.
+The milestone retains the current source-checkout workflow and defers packaged releases and license selection. This preserves the existing development scope without selecting a new distribution policy. The application runs through Node.js 22+ and `npm start`; runtime modules use Node built-ins. Playwright and PNG parsing remain development-only verification dependencies. `package.json` stays private; no installer, executable bundle, npm publication, release or license file is introduced.
 
-This recommendation closes the experimental implementation milestone without making a redistribution or production-support claim. Public packaging, a redistribution license, signing/update mechanisms and wider onboarding require a separate user-selected scope and decision before implementation. The branch rename is a separate repository action, not a release.
+This boundary closes the experimental implementation milestone without making a redistribution or production-support claim. Public packaging, a redistribution license, signing/update mechanisms and wider onboarding require a separate user-selected scope and decision before implementation. The branch rename is a separate repository action, not a release.
