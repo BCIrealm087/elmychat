@@ -39,7 +39,7 @@ export class NativePage {
     const result = [];
     for (const context of contexts) {
       try {
-        const info = await this.frames.evaluate(context, '({url:location.href,topLevel:window===top,width:innerWidth,height:innerHeight})');
+        const info = await this.frames.evaluate(context, '({url:location.href,topLevel:window===top,width:innerWidth,height:innerHeight,documentReady:!!document.body})');
         result.push({ context, ...info });
       } catch (error) { if (this.has(context)) throw error; }
     }
@@ -57,7 +57,8 @@ export class NativePage {
       const stopped = await this.call(context, platform, 'stop', existing);
       if (!stopped?.restored) throw new Error('Previous adapter could not restore styles.');
     }
-    const result = await this.frames.evaluate(context, adapter.expression(options));
+    const result = await this.frames.evaluate(context, `(() => { if (!document.body) return { installed: false, waitingForDocument: true }; if (typeof ResizeObserver !== 'function') throw new Error('ResizeObserver is unavailable in the native frame.'); return ${adapter.expression(options)}; })()`);
+    if (result?.waitingForDocument) return result;
     if (!result?.installed) throw new Error('Adapter installation did not complete.');
     return result;
   }

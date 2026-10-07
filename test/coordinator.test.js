@@ -185,3 +185,29 @@ test('failure between draining reports and applying layouts is latched and healt
   await runtime.step(); assert.equal(page.installs, installs);
   await runtime.stop();
 });
+
+test('loading documents wait and recover in the same context without latching or disrupting Twitch', async () => {
+  const page = new Page();
+  const context = page.frames[2].context;
+  page.frames[2].documentReady = false;
+  const runtime = new NativeCoordinator(config, { openPage: async () => page });
+  for (let i = 0; i < 3; i += 1) await runtime.step();
+  assert.equal(page.installs, 1);
+  assert.equal(runtime.diagnostics().sources[0].status, 'running');
+  assert.equal(runtime.diagnostics().sources[1].reason, 'native-document-loading');
+  page.frames[2].documentReady = true;
+  const install = page.install.bind(page);
+  let raced = false;
+  page.install = async (...args) => {
+    if (!raced) { raced = true; return { installed: false, waitingForDocument: true }; }
+    return install(...args);
+  };
+  await runtime.step();
+  assert.equal(runtime.diagnostics().sources[1].status, 'waiting');
+  assert.equal(runtime.compositor.sourceCount, 1);
+  await runtime.step();
+  assert.equal(runtime.diagnostics().sources[1].status, 'running');
+  assert.equal(page.frames[2].context, context);
+  assert.equal(runtime.compositor.sourceCount, 2);
+  await runtime.stop();
+});

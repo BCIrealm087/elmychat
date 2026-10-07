@@ -139,7 +139,11 @@ export class NativeCoordinator {
           record = undefined;
         }
         if (candidates.length !== 1) continue;
-        const { context } = candidates[0];
+        const { context, documentReady } = candidates[0];
+        if (!record && documentReady === false) {
+          this.#sourceStates.set(source.id, { status: 'waiting', reason: 'native-document-loading' });
+          continue;
+        }
         const block = this.#blocked.get(source.id);
         if (block?.context === context) { this.#sourceStates.set(source.id, { status: 'failed', reason: block.reason }); continue; }
         this.#blocked.delete(source.id);
@@ -150,8 +154,13 @@ export class NativeCoordinator {
             // Track before awaiting so shutdown/failure can restore an injection
             // even when its response was lost.
             this.#records.set(source.id, record);
-            await this.#page.install(context, source.platform, { sourceId: source.id, sessionId: record.sessionId, width: record.width, maxRoots: 500, maxReports: 1000 }, this.#owner);
+            const installation = await this.#page.install(context, source.platform, { sourceId: source.id, sessionId: record.sessionId, width: record.width, maxRoots: 500, maxReports: 1000 }, this.#owner);
             if (this.#stopping || this.#page.disconnected) throw new Error('Transport changed during installation.');
+            if (installation?.waitingForDocument) {
+              this.#records.delete(source.id);
+              this.#sourceStates.set(source.id, { status: 'waiting', reason: 'native-document-loading' });
+              continue;
+            }
             this.compositor.activateSource(source.id, record.sessionId);
           }
           if (tops[0].width > 0 && record.width !== tops[0].width) {

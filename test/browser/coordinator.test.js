@@ -41,6 +41,13 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
       assert.fail(`Coordinator did not converge: ${JSON.stringify(runtime.diagnostics())}`);
     }
     const roots = () => page.frames().filter((frame) => frame !== page.mainFrame());
+    const loadingFrame = page.frames().find((frame) => frame.url().startsWith(fixtures.sources[1].urlPrefix));
+    await loadingFrame.evaluate(() => { globalThis.loadingBody = document.body; loadingBody.remove(); });
+    for (let i = 0; i < 3; i += 1) { await runtime.step(); await idle(); }
+    assert.equal(runtime.diagnostics().sources[0].status, 'running');
+    assert.equal(runtime.diagnostics().sources[1].reason, 'native-document-loading');
+    assert.equal(await loadingFrame.evaluate(() => typeof globalThis.__elmychatYouTubeAdapterV1), 'undefined');
+    await loadingFrame.evaluate(() => { document.documentElement.append(loadingBody); delete globalThis.loadingBody; });
     await until((state) => state.layout.placements.length === 8 && state.layout.placements.every((entry) => entry.visible));
     const initial = runtime.diagnostics();
     const frameTypes = initial.sources.map((source) => {
@@ -121,7 +128,7 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
     await writeFile(join(output, `${name}.png`), bytes);
     await writeFile(join(output, `${name}.json`), JSON.stringify({
       kind: 'synthetic-coordinator-proof', status: 'passed', environment: { browser: context.browser().version(), platform: process.platform, frameTypes },
-      checks: ['reports-to-layout', 'transparent-gap-pixels', 'native-node-identity', 'delayed-resize', 'viewport-remeasurement', 'removal', 'frame-navigation', 'socket-reconnect', 'page-refresh', 'iframe-unload', 'teardown-restoration', 'connected-root-eviction', 'foreign-owner-isolation'],
+      checks: ['delayed-document-readiness', 'reports-to-layout', 'transparent-gap-pixels', 'native-node-identity', 'delayed-resize', 'viewport-remeasurement', 'removal', 'frame-navigation', 'socket-reconnect', 'page-refresh', 'iframe-unload', 'teardown-restoration', 'connected-root-eviction', 'foreign-owner-isolation'],
       initialLayout: initial.layout, finalLayout, cleanup: stopped.cleanup,
       limitations: ['Synthetic documents and Chromium; continuous live OBS/platform behavior remains unverified.'],
     }, null, 2) + '\n');

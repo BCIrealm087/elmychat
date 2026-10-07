@@ -73,3 +73,7 @@ If the frame navigates, the selected node disappears, or native layout rerenders
 - [YouTube live chat embedding](https://support.google.com/youtube/answer/2524549): live video ID and matching embed domain.
 - [CDP Target](https://chromedevtools.github.io/devtools-protocol/tot/Target/) and [Runtime](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/): frame attachment and context evaluation.
 - [Playwright browser installation](https://playwright.dev/docs/browsers): version-specific browser downloads and system dependencies.
+
+## Step 5 live startup blocker — 2026-10-07
+
+The operator health report connected to OBS and showed Twitch running with 57 measured roots, but YouTube failed during injection with the combined document/ResizeObserver readiness error. This is not a passed continuous native gate. Startup now waits for a missing source body without latching that transient condition, rechecks readiness at installation, and reports a missing ResizeObserver separately. Node and real-CDP regression coverage includes a document becoming ready in the same context. Fix verification is tracked in CI; live persistence remains open.
