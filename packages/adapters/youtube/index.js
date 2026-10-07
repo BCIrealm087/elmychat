@@ -1,4 +1,5 @@
 import { createNativeAdapter } from '../native-runtime.js';
+import { youtubeMark } from '../platform-marks.js';
 
 // Text root: live static-proof evidence. Other roots/scope: synthetic candidates,
 // not an assertion of current universal YouTube DOM support.
@@ -16,6 +17,7 @@ export const installYouTubeAdapter = createNativeAdapter({
     { selector: 'yt-live-chat-sponsorships-gift-redemption-announcement-renderer', kind: 'gift-redemption' },
   ],
   identityAttributes: ['id', 'data-id'], selectorAttributes: ['id'],
+  originMark: youtubeMark,
 });
 
 export function youtubeAdapterExpression(options) {

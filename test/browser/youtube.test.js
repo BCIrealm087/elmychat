@@ -69,7 +69,7 @@ test('YouTube text and special native hosts retain lifecycle/descendants and pai
   const alpha = (x, y) => png.data[(y * png.width + x) * 4 + 3];
   const [first, second] = core.layout().placements;
   for (let y = Math.ceil(first.rect.y + first.rect.height); y < second.rect.y; y += 1) for (let x = 0; x < png.width; x += 1) assert.equal(alpha(x, y), 0);
-  for (const entry of core.layout().placements) assert.equal(alpha(2, Math.floor(entry.rect.y + 2)), 255);
+  for (const entry of core.layout().placements) assert.equal(alpha(22, Math.floor(entry.rect.y + 2)), 255);
   assert.equal(alpha(2, 2), 0, 'Ticker/chrome must not paint outside the message list.');
   core.setViewport({ width: 420, height: 20 });
   await call(page, 'applyPlacements', { revision: 2, placements: core.layout().placements });

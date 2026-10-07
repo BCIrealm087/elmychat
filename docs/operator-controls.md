@@ -11,7 +11,9 @@ npm start
 
 Open `http://127.0.0.1:3210/` in your browser. Enter the Twitch channel and a YouTube video ID or HTTPS watch, live or youtu.be URL. Click **Save and connect**, then copy the displayed `http://127.0.0.1:3210/overlay` URL into an OBS Browser Source. That URL remains the same when changing chats. The dedicated overlay checks source settings every two seconds and updates only its own native chat frames. Existing loaded frames stay intact through a temporary local-server outage.
 
-Twitch messages wrap within a 340px reference sidebar column so wider OBS sources preserve common Twitch ASCII-art line breaks. Extra width stays transparent to the right of Twitch messages; YouTube still uses the full source width. Sources narrower than 340px reflow Twitch text to fit. Fonts, native padding, emotes and Unicode spaces remain native. Customized Twitch appearance settings can produce different wrapping; see the [Twitch layout contract](../packages/adapters/twitch/README.md#positioning-and-restoration).
+Each message has a small platform icon on the left: the purple Twitch mark or the red YouTube play mark. A subtle dark backing keeps it readable over the OBS scene. Native badges, names and emotes remain intact.
+
+Twitch messages wrap within a 340px reference sidebar column so wider OBS sources preserve common Twitch ASCII-art line breaks. Extra width stays transparent to the right of Twitch messages; YouTube uses the available source width. Sources narrower than 340px reflow Twitch text to fit. Fonts, native padding, emotes and Unicode spaces remain native. Rows without enough native left padding receive a narrow icon gutter instead of covering text; unusually tight layouts may wrap earlier. Customized Twitch appearance settings can produce different wrapping; see the [Twitch layout contract](../packages/adapters/twitch/README.md#positioning-and-restoration).
 
 Keep OBS launched with `--remote-debugging-port=9222`, or set its actual port under **OBS connection settings** before saving. This remains browser-source debugging, not obs-websocket. Elmychat never launches/restarts OBS or navigates a selected OBS page through CDP.
 

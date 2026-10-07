@@ -1,4 +1,5 @@
 import { createNativeAdapter } from '../native-runtime.js';
+import { twitchMark } from '../platform-marks.js';
 
 // The text selector has operator evidence; data-id remains a synthetic heuristic.
 export const adapterKey = '__elmychatTwitchAdapterV1';
@@ -10,6 +11,7 @@ export const installTwitchAdapter = createNativeAdapter({
   // Match the conventional Twitch sidebar width instead of stretching text
   // across a wide OBS source. Typography/whitespace remain owned by Twitch.
   messageWidthLimit: 340,
+  originMark: twitchMark,
 });
 
 export function twitchAdapterExpression(options) {

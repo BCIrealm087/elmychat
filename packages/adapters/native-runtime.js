@@ -13,7 +13,7 @@ function nativeRuntime(options = {}, policy) {
   let width = options.width;
   // Reports address the shared viewport; a platform may wrap its native box
   // in a narrower column while retaining that same placement coordinate space.
-  const messageWidth = () => Math.min(width, policy.messageWidthLimit ?? width);
+  const messageWidth = (entry) => Math.min(Math.max(1, width - (entry?.gutter ?? 0)), policy.messageWidthLimit ?? width);
   let status = 'running';
   let failure = null;
   let frame = null;
@@ -24,6 +24,11 @@ function nativeRuntime(options = {}, policy) {
   const reports = new Map();
   const styles = new Map();
   const recycled = new Set();
+  // Decorations are siblings of native roots, never native text/child mutations.
+  const decorations = new WeakSet();
+  const decorationStyles = new WeakMap();
+  const markerEntries = new WeakMap();
+  let markerLayer = null;
   const counts = { added: 0, removed: 0, resized: 0, styleRepairs: 0, flushes: 0 };
   const parseStyle = (raw) => { const node = document.createElement('div'); node.setAttribute('style', raw ?? ''); return node.style; };
   const address = (entry) => ({ sourceId, sessionId, messageId: entry.messageId });
@@ -84,6 +89,57 @@ function nativeRuntime(options = {}, policy) {
     styles.delete(node);
   }
 
+  function decorateStyle(node, properties) {
+    const desired = Object.entries({ all: 'initial', ...properties }).map(([name, value]) => `${name}: ${value} !important;`).join(' ');
+    decorationStyles.set(node, desired);
+    if (node.getAttribute('style') !== desired) node.setAttribute('style', desired);
+  }
+
+  function ensureMarker(entry) {
+    if (!policy.originMark) return;
+    if (!markerLayer) {
+      markerLayer = document.createElement('div');
+      markerLayer.setAttribute('data-elmychat-origin-layer', platform);
+      decorations.add(markerLayer);
+    }
+    decorateStyle(markerLayer, { position: 'fixed', inset: '0', 'pointer-events': 'none', visibility: 'visible', 'z-index': '2147483647' });
+    if (markerLayer.parentNode !== document.body) document.body.append(markerLayer);
+    if (!entry.marker) {
+      const marker = document.createElement('span');
+      marker.setAttribute('data-elmychat-origin', platform);
+      marker.setAttribute('role', 'img');
+      marker.setAttribute('aria-label', `${policy.originMark.label} message`);
+      marker.setAttribute('title', policy.originMark.label);
+      // Shadow isolation protects the bundled mark from native page SVG rules.
+      marker.attachShadow({ mode: 'open' }).innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:block">${policy.originMark.underlay ? `<path fill="white" d="${policy.originMark.underlay}"/>` : ''}<path fill="${policy.originMark.color}" d="${policy.originMark.path}"/></svg>`;
+      decorations.add(marker);
+      markerEntries.set(marker, entry);
+      entry.marker = marker;
+    }
+    if (entry.marker.parentNode !== markerLayer) markerLayer.append(entry.marker);
+  }
+
+  function positionMarker(entry) {
+    if (!entry.marker) return;
+    const placement = entry.placement;
+    const visible = !entry.retired && placement?.visible && placement.rect.width === width;
+    const x = (placement?.rect.x ?? 0) + 2;
+    const y = (placement?.rect.y ?? 0) + entry.markerTop;
+    const area = visible ? placement.clip : null;
+    // Intersect with the message as well: tiny rows cannot leak into spacers.
+    const left = area ? Math.max(x, area.x) : x;
+    const top = area ? Math.max(y, area.y) : y;
+    const right = area ? Math.min(x + 16, area.x + area.width) : x;
+    const bottom = area ? Math.min(y + 16, area.y + area.height, placement.rect.y + placement.rect.height) : y;
+    decorateStyle(entry.marker, {
+      display: 'block', position: 'fixed', left: `${x}px`, top: `${y}px`, width: '16px', height: '16px',
+      'box-sizing': 'border-box', padding: '1px', 'border-radius': '3px', background: 'rgba(24,24,27,0.85)',
+      'box-shadow': 'inset 0 0 0 1px rgba(255,255,255,0.16)', 'pointer-events': 'none',
+      visibility: right > left && bottom > top ? 'visible' : 'hidden',
+      'clip-path': `inset(${Math.max(0, top - y)}px ${Math.max(0, x + 16 - right)}px ${Math.max(0, y + 16 - bottom)}px ${Math.max(0, left - x)}px)`,
+    });
+  }
+
   function terminate(reason) {
     if (status !== 'running') return;
     status = reason === 'teardown' || reason === 'pagehide' ? 'stopped' : 'failed';
@@ -95,6 +151,8 @@ function nativeRuntime(options = {}, policy) {
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('resize', schedule);
     for (const node of [...styles.keys()]) restoreStyle(node);
+    markerLayer?.remove();
+    markerLayer = null;
     roots.clear();
     recycled.clear();
     reports.clear();
@@ -115,6 +173,7 @@ function nativeRuntime(options = {}, policy) {
     if (!entry.retired) { counts.removed += 1; enqueue(entry, 'removed', reason); }
     resizer.unobserve(entry.node);
     restoreStyle(entry.node);
+    entry.marker?.remove();
     roots.delete(entry.node);
   }
 
@@ -124,12 +183,13 @@ function nativeRuntime(options = {}, policy) {
     let clip = 'none';
     if (visible) {
       const { rect, clip: area } = placement;
-      const offsets = [area.y - rect.y, rect.x + messageWidth() - area.x - area.width, rect.y + rect.height - area.y - area.height, area.x - rect.x].map((value) => Math.max(0, value));
+      const x = rect.x + entry.gutter;
+      const offsets = [area.y - rect.y, x + messageWidth(entry) - area.x - area.width, rect.y + rect.height - area.y - area.height, area.x - x].map((value) => Math.max(0, value));
       clip = `inset(${offsets.map((value) => `${value}px`).join(' ')})`;
     }
     return {
-      position: 'fixed', top: `${placement?.rect.y ?? 0}px`, left: `${placement?.rect.x ?? 0}px`,
-      width: `${messageWidth()}px`, height: 'auto', 'min-width': '0', 'max-width': 'none', 'min-height': '0', 'max-height': 'none',
+      position: 'fixed', top: `${placement?.rect.y ?? 0}px`, left: `${(placement?.rect.x ?? 0) + entry.gutter}px`,
+      width: `${messageWidth(entry)}px`, height: 'auto', 'min-width': '0', 'max-width': 'none', 'min-height': '0', 'max-height': 'none',
       'box-sizing': 'border-box', margin: '0', visibility: visible ? 'visible' : 'hidden',
       transform: 'none', 'z-index': '2147483647', 'clip-path': clip,
     };
@@ -159,7 +219,7 @@ function nativeRuntime(options = {}, policy) {
         if (roots.has(node)) continue;
         if (!Number.isSafeInteger(sequence + 1)) throw new Error('identity-sequence-exhausted');
         const messageKind = rootTypes.find(type => node.matches(type.selector)).kind;
-        const entry = { node, messageId: `${platform}-${++sequence}`, messageKind, nativeKey: nativeKeyFor(node), height: null, measuredWidth: null, delivered: false, retired: false, placement: null };
+        const entry = { node, messageId: `${platform}-${++sequence}`, messageKind, nativeKey: nativeKeyFor(node), height: null, measuredWidth: null, gutter: 0, markerTop: 0, delivered: false, retired: false, placement: null };
         roots.set(node, entry);
         resizer.observe(node);
       }
@@ -179,10 +239,17 @@ function nativeRuntime(options = {}, policy) {
         overflow: node === document.body || node === document.documentElement ? 'hidden' : 'visible',
       });
       for (const entry of roots.values()) {
+        const nativeStyle = getComputedStyle(entry.node);
+        const padding = parseFloat(nativeStyle.paddingLeft) || 0;
+        entry.gutter = policy.originMark && padding < 20 ? Math.min(20, Math.max(0, width - 1)) : 0;
+        const lineHeight = parseFloat(nativeStyle.lineHeight) || (parseFloat(nativeStyle.fontSize) || 14) * 1.4;
+        entry.markerTop = Math.max(0, (parseFloat(nativeStyle.paddingTop) || 0) + (lineHeight - 16) / 2);
+        ensureMarker(entry);
         applyStyle(entry.node, rootProperties(entry));
+        positionMarker(entry);
         if (entry.retired) continue;
         const rect = entry.node.getBoundingClientRect();
-        if (!pixel(rect.height) || !pixel(rect.width, true) || Math.abs(rect.width - messageWidth()) > 1) throw new Error('measurement-width-or-height-invalid');
+        if (!pixel(rect.height) || !pixel(rect.width, true) || Math.abs(rect.width - messageWidth(entry)) > 1) throw new Error('measurement-width-or-height-invalid');
         if (entry.height === null || Math.abs(entry.height - rect.height) > 0.01 || entry.measuredWidth !== width) {
           const first = entry.height === null;
           entry.height = rect.height;
@@ -201,6 +268,17 @@ function nativeRuntime(options = {}, policy) {
     if (records.length > 10_000) { terminate('mutation-batch-limit'); return; }
     let dirty = false;
     for (const record of records) {
+      if (decorations.has(record.target)) {
+        // Own writes stay idle; repair foreign removal/style writes without
+        // treating any decoration as a native message-content replacement.
+        if (record.type === 'attributes' && decorationStyles.get(record.target) !== record.target.getAttribute('style')) dirty = true;
+        if (record.type === 'childList' && [...record.removedNodes].some(node => roots.has(markerEntries.get(node)?.node))) dirty = true;
+        continue;
+      }
+      if (record.type === 'childList' && [...record.addedNodes, ...record.removedNodes].every(node => decorations.has(node))) {
+        if (markerLayer && !markerLayer.isConnected) dirty = true;
+        continue;
+      }
       if (record.type === 'attributes' && record.attributeName === 'style' && styles.get(record.target)?.applied === record.target.getAttribute('style')) continue;
       dirty = true;
       if (record.type === 'childList') {
@@ -236,7 +314,7 @@ function nativeRuntime(options = {}, policy) {
   }
 
   const api = Object.freeze({
-    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, messageWidth: messageWidth(), revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
+    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, messageWidth: messageWidth(), originMarkers: [...roots.values()].filter(entry => entry.marker).length, gutterMessages: [...roots.values()].filter(entry => entry.gutter).length, revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
     takeReports(command) {
       if (!authorized(command)) return rejected('stale-session');
       const events = [...reports.values()];

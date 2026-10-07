@@ -63,7 +63,7 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
     const bytes = await page.screenshot({ omitBackground: true });
     const png = PNG.sync.read(bytes);
     const alpha = (x, y) => png.data[(y * png.width + x) * 4 + 3];
-    for (const entry of initial.layout.placements) assert.equal(alpha(2, Math.floor(entry.rect.y + 2)), 255, 'Native content must paint across overlapping frames.');
+    for (const entry of initial.layout.placements) assert.equal(alpha(22, Math.floor(entry.rect.y + 2)), 255, 'Native content must paint across overlapping frames beside the icon gutter.');
     for (let i = 1; i < initial.layout.placements.length; i += 1) {
       const previous = initial.layout.placements[i - 1].rect;
       const next = initial.layout.placements[i].rect;

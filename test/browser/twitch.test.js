@@ -142,7 +142,7 @@ test('Twitch discovery, compositor placement and clipping preserve native roots 
     sameDescendants: nativeDescendants[index].every(node => root.contains(node)),
     x: root.getBoundingClientRect().x, y: root.getBoundingClientRect().y,
   })));
-  assert.ok(native.every(root => root.sameRoot && root.sameDescendants && root.x === 0));
+  assert.ok(native.every(root => root.sameRoot && root.sameDescendants && root.x === 20), 'Low-padding fixtures reserve an icon gutter without covering their native content.');
   assert.deepEqual(native.map(root => root.y), core.layout().placements.map(entry => entry.rect.y));
   const screenshot = await page.screenshot({ omitBackground: true });
   const png = PNG.sync.read(screenshot);
@@ -150,7 +150,7 @@ test('Twitch discovery, compositor placement and clipping preserve native roots 
   for (let y = Math.ceil(first.rect.y + first.rect.height); y < second.rect.y; y += 1) {
     for (let x = 0; x < png.width; x += 1) assert.equal(png.data[(y * png.width + x) * 4 + 3], 0);
   }
-  assert.equal(png.data[(Math.floor(first.rect.y + 2) * png.width + 2) * 4 + 3], 255);
+  assert.equal(png.data[(Math.floor(first.rect.y + 2) * png.width + 22) * 4 + 3], 255);
   core.setViewport({ width: 420, height: 20 });
   const clipped = core.layout();
   await call(page, 'applyPlacements', { revision: 2, placements: clipped.placements });
