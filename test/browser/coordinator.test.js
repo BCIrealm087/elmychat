@@ -64,9 +64,10 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
     }
     const twitchFrame = page.frames().find((frame) => frame.url().startsWith(fixtures.sources[0].urlPrefix));
     await twitchFrame.evaluate(() => nativeRoots[0].append(document.createElement('br'), document.createTextNode('Delayed native height')));
-    const sequence = initial.layout.placements[0].sequence;
-    await until((state) => state.layout.placements[0].height > initial.layout.placements[0].height);
-    assert.equal(runtime.diagnostics().layout.placements[0].sequence, sequence);
+    const initialTwitch = initial.layout.placements.find((entry) => entry.sourceId === 'twitch' && entry.messageId === 'twitch-1');
+    assert.ok(initialTwitch);
+    await until((state) => state.layout.placements.some((entry) => entry.sessionId === initialTwitch.sessionId && entry.messageId === initialTwitch.messageId && entry.height > initialTwitch.height));
+    assert.equal(runtime.diagnostics().layout.placements.find((entry) => entry.sessionId === initialTwitch.sessionId && entry.messageId === initialTwitch.messageId).sequence, initialTwitch.sequence);
     await page.setViewportSize({ width: 300, height: 460 });
     await until((state) => state.layout.viewport.width === 300 && state.layout.placements.every((entry) => entry.width === 300));
     assert.equal(runtime.diagnostics().layout.placements.at(-1).rect.y + runtime.diagnostics().layout.placements.at(-1).height, 460);
@@ -93,11 +94,18 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
       assert.equal(await frame.evaluate(() => beforeStyles.every(([node, raw, css]) => node.getAttribute('style') === raw && node.style.cssText === css)), true, 'Current native styles must restore exactly.');
     }
     runtime = new NativeCoordinator({ ...config, maxEntries: 2 });
-    await until((state) => state.layout.placements.length === 2 && state.layout.placements.every((entry) => entry.sourceId === 'youtube'));
+    await until((state) => state.sources.every((source) => source.status === 'running' && source.trackedRoots > 0) && state.layout.placements.length === 2);
     for (let i = 0; i < 4; i += 1) { await runtime.step(); await idle(); }
     assert.equal(runtime.compositor.size, 2, 'Evicted connected roots must not be re-admitted.');
     const currentTwitch = page.frames().find((frame) => frame.url().startsWith(fixtures.sources[0].urlPrefix));
-    assert.equal(await currentTwitch.evaluate(() => nativeRoots.every((node) => getComputedStyle(node).visibility === 'hidden')), true);
+    const retained = runtime.compositor.entries();
+    for (const source of fixtures.sources) {
+      const frame = page.frames().find((candidate) => candidate.url().startsWith(source.urlPrefix));
+      assert.equal(await frame.evaluate(({ retained, platform, sourceId }) => nativeRoots.every((node, i) => {
+        const kept = retained.some((entry) => entry.sourceId === sourceId && entry.messageId === `${platform}-${i + 1}`);
+        return getComputedStyle(node).visibility === (kept ? 'visible' : 'hidden');
+      }), { retained, platform: source.platform, sourceId: source.id }), true, 'Each native root must reflect its actual retained identity, regardless of cross-source admission order.');
+    }
     await runtime.stop();
     await currentTwitch.evaluate(twitchAdapterExpression({ sourceId: 'foreign', sessionId: 'foreign-generation', width: 300 }));
     runtime = new NativeCoordinator(config);
