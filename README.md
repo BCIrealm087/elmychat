@@ -8,12 +8,12 @@ Prolonged live stability and broader OBS compatibility remain unverified. Twitch
 
 ## Development
 
-Repository: `BCIrealm087/elmychat`. Default milestone branch: **`master`** (renamed from `codex-startup`). The user will select the next working branch before feature development resumes.
+Repository: `BCIrealm087/elmychat`. Current development branch: **`codex-improvements`**. The default branch and pull-request merge target is **`master`**.
 
 Install Node.js 22 or newer, then run these commands from the repository root (PowerShell, Bash, or another terminal):
 
 ```sh
-git switch master
+git switch codex-improvements
 npm ci
 npm run check
 npm start

@@ -2,7 +2,7 @@
 
 ## Setup and commands
 
-Use `BCIrealm087/elmychat`. `master` is the default milestone branch; the next feature branch awaits user selection. Node.js 22+ and its bundled npm are the runtime requirements. Pinned Playwright and PNG parsing packages are dev dependencies for browser verification. The coordinator and native CDP probe use only built-in modules.
+Use `BCIrealm087/elmychat` on the current development branch, `codex-improvements`. `master` is the default branch and pull-request merge target. Node.js 22+ and its bundled npm are the runtime requirements. Pinned Playwright and PNG parsing packages are dev dependencies for browser verification. The coordinator and native CDP probe use only built-in modules.
 
 | Command | Behavior |
 | --- | --- |
@@ -22,7 +22,7 @@ The commands work in PowerShell and Bash without shell-specific environment-vari
 
 ## Verification
 
-The bootstrap test starts an ephemeral loopback server and checks the overlay, health, allowed methods, HEAD, and unavailable file paths. CDP tests verify response routing, loopback/target selection, disconnects, and retired contexts. Compositor tests verify arrival order, ties, exact spacing, bottom alignment, viewport clipping, resize invalidation, removal, source generations, bounded history and mixed-operation geometry using pure data. Browser tests verify actual cross-site context access, original-node identity, measured placement, pixel alpha, and restoration in Chromium. Install the browser with `npx playwright install chromium --no-shell`; CI installs it and runs `npm run check:all` on Linux and Windows using Node 22, for pushes to and PRs targeting `master`. When the user selects the next working branch, update the push filter for that branch while retaining PR checks into `master`.
+The bootstrap test starts an ephemeral loopback server and checks the overlay, health, allowed methods, HEAD, and unavailable file paths. CDP tests verify response routing, loopback/target selection, disconnects, and retired contexts. Compositor tests verify arrival order, ties, exact spacing, bottom alignment, viewport clipping, resize invalidation, removal, source generations, bounded history and mixed-operation geometry using pure data. Browser tests verify actual cross-site context access, original-node identity, measured placement, pixel alpha, and restoration in Chromium. Install the browser with `npx playwright install chromium --no-shell`; CI installs it and runs `npm run check:all` on Linux and Windows using Node 22, for pushes to `codex-improvements` and PRs targeting `master`.
 
 Synthetic browser checks establish browser mechanics, not actual OBS, Twitch/YouTube policies, or live selectors. The operator completed the bounded OBS gate; see [proof evidence and persistence limitations](feasibility-proof.md). Step 5 now wires adapters to the compositor. Its automated integration suite passed Windows/Linux CI; the operator completed the single bounded continuous check in [coordinator verification](coordinator.md), confirming merged rendering, emotes/alpha, refresh recovery and restoration. No repeat is needed to begin operator controls. Test future adapters with synthetic DOM fixtures, including removal/replacement and style/layout interference. Reserve further live operator checks for critical questions that automated tests cannot answer.
 

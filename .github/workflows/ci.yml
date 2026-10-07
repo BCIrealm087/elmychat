@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [codex-improvements]
   pull_request:
     branches: [master]
 

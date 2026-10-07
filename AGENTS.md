@@ -2,9 +2,9 @@
 
 ## Repository and branch
 
-- Work only in `BCIrealm087/elmychat`. The default milestone branch is `master`, renamed from `codex-startup` by the user.
-- No next feature branch has been selected yet. Limit current `master` edits to branch-rename housekeeping; wait for the user to name the next working branch before starting feature work.
-- Before editing, committing, or pushing, check the repository and branch. Never create or update `main`, another branch, or the Elmybot repository as a workaround.
+- Work only in `BCIrealm087/elmychat` on the selected development branch, `codex-improvements`. The default branch and pull-request merge target is `master`.
+- `codex-improvements` is the current work branch for improvements following the initial implementation milestone. Do not write to `master` or any other branch.
+- Before editing, committing, or pushing, verify `BCIrealm087/elmychat` and `codex-improvements`. Never create or update another branch or the Elmybot repository as a workaround.
 - The repository was initialized directly on `codex-startup` and renamed to `master` after steps 0–7. Preserve its existing history.
 - Push ordinary completed work to the explicitly selected working branch when authorized by the task. Do not merge, create a release, or change repository settings without a request.
 
