@@ -61,4 +61,8 @@ The core retains at most `maxEntries` messages and spacers together and evicts o
 
 Pixels must be finite and nonnegative (positive for message measurement width), capped at 1,000,000 per dimension/gap/spacer; fractions are supported. IDs are nonempty strings of at most 512 characters. Invalid configuration/measurements throw before changing state. Source-capacity exhaustion throws rather than silently retiring another source. Sequences never reset on removal; numeric sequence exhaustion rejects admission. Returned snapshots cannot mutate retained state.
 
-Behavior tests run with `npm test` / `npm run check`, covering ordering and clock ties, spacing, clipping, resize invalidation, session retirement, removals, bounded history, validation, snapshot isolation, and a deterministic mixed-operation geometry exercise. See [architecture](../../docs/architecture.md) and [roadmap](../../docs/roadmap.md). Live native survival, DOM observation, and actual viewport clipping remain adapter/coordinator work.
+## Verification
+
+The 12 compositor tests run with `npm test` / `npm run check`, covering ordering and clock ties, spacing, clipping, resize invalidation, session retirement, removals, bounded history, validation, snapshot isolation, and a deterministic 1,500-operation geometry exercise. A separate 2,000-arrival test verifies retention/eviction. Local syntax checks and all 16 Node tests passed. [CI run 37569927744](https://github.com/BCIrealm087/elmychat/actions/runs/37569927744), code commit `cf7aa59`, passed `npm run check:all` on Windows and Linux on 2026-10-07 UTC, including all 16 Node tests and both existing browser proof tests.
+
+See [architecture](../../docs/architecture.md) and [roadmap](../../docs/roadmap.md). Live native survival, DOM observation, and actual viewport clipping remain adapter/coordinator work. Step 2 adds no new manual OBS check.
