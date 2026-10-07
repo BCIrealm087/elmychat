@@ -111,7 +111,16 @@ function nativeRuntime(options = {}, policy) {
       marker.setAttribute('aria-label', `${policy.originMark.label} message`);
       marker.setAttribute('title', policy.originMark.label);
       // Shadow isolation protects the bundled mark from native page SVG rules.
-      marker.attachShadow({ mode: 'open' }).innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:block">${policy.originMark.underlay ? `<path fill="white" d="${policy.originMark.underlay}"/>` : ''}<path fill="${policy.originMark.color}" d="${policy.originMark.path}"/></svg>`;
+      const shadow = marker.attachShadow({ mode: 'open' });
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      for (const [name, value] of Object.entries({ viewBox: '0 0 24 24', width: '14', height: '14', 'aria-hidden': 'true', style: 'display:block' })) svg.setAttribute(name, value);
+      // DOM construction also works on native pages enforcing Trusted Types.
+      for (const [path, color] of [[policy.originMark.underlay, 'white'], [policy.originMark.path, policy.originMark.color]]) {
+        if (!path) continue;
+        const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        shape.setAttribute('d', path); shape.setAttribute('fill', color); svg.append(shape);
+      }
+      shadow.append(svg);
       decorations.add(marker);
       markerEntries.set(marker, entry);
       entry.marker = marker;

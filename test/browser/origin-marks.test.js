@@ -20,7 +20,8 @@ for (const [platform, expression, key, label, color] of [
     const context = await browser.newContext({ viewport: { width: 420, height: 300 } });
     t.after(() => context.close());
     const page = await context.newPage();
-    await page.setContent(await readFile(new URL(`../fixtures/${platform}/source.html`, import.meta.url), 'utf8'));
+    const fixture = await readFile(new URL(`../fixtures/${platform}/source.html`, import.meta.url), 'utf8');
+    await page.setContent(fixture.replace('<head>', `<head><meta http-equiv="Content-Security-Policy" content="require-trusted-types-for 'script'">`));
     await page.evaluate(() => {
       // Native padding available in ordinary platform rows; exercise fallback
       // separately. No stable native keys: decorations must not recycle roots.
