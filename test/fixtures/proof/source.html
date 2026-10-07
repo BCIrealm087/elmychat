@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html, body { margin: 0; background: #27272a; }
+  .wrapper { transform: translateY(40px); overflow: hidden; height: 60px; background: yellow; }
+  .message { padding: 12px; margin: 4px; color: white; background: #c83232; font: 18px sans-serif; border-radius: 0; }
+  body[data-source="second"] .message { background: #3264c8; }
+  .decoration { height: 500px; background: yellow; }
+</style></head><body data-source="SOURCE">
+  <div class="wrapper"><article class="message"><b>Synthetic SOURCE:</b> <span>A short message with <i>native descendants</i>.</span></article></div>
+  <div class="decoration">Unrelated chrome that must not paint in the proof</div>
+  <script>
+    globalThis.originalMessage = document.querySelector('.message');
+    globalThis.originalChildren = [...originalMessage.querySelectorAll('*')];
+  </script>
+</body></html>

@@ -21,12 +21,14 @@
 - Use JavaScript ES modules and Node.js 22+ for the initial scaffold. Prefer built-in modules until a real requirement justifies a dependency.
 - Keep commands portable to Windows/PowerShell and Linux. Use Node scripts for shared tooling.
 - Run `npm ci` and `npm run check` before pushing. Add behavior-focused tests for substantive logic; avoid tests that merely restate constants or file structure.
+- For browser-control or native-probe changes, also run `npm run test:browser`. CI installs Chromium and runs `npm run check:all` on Windows and Linux. A missing browser is a failed verification environment, never a passing/skipped proof.
 - Keep runtime state, platform sessions, browser profiles, credentials, and recordings out of git. Bind local services to loopback by default.
 - Browser-control access is powerful: do not expose debugging ports to a LAN or operate unrelated tabs. OBS owns its process and lifecycle; do not restart it automatically.
 - Use synthetic fixtures for automated DOM tests. Record selector evidence and limitations rather than inventing live-platform compatibility.
-- Focus on automated development cycles. The user handles live OBS/platform testing and deployment unless they ask for help. The initial OBS feasibility milestone warrants one bounded operator check when browser automation cannot answer it.
+- Design roadmaps around automatic development cycles, with stable numbered steps, bounded scope, and clear acceptance criteria. Include human operator testing only when omitting it creates a critical risk; automate, simulate, or CI-verify other validation.
+- The user handles live OBS/platform testing and deployment unless they ask for help. For the initial proof, native-platform/OBS rendering is a critical architectural uncertainty that Chromium fixtures cannot establish. Prepare and verify the complete diagnostic before handing over one bounded check; do not mark OBS feasibility proved by synthetic success.
 - Report implemented behavior, verification performed, and outstanding limitations separately. Do not describe placeholders as functional adapters.
 
 ## Current state
 
-Only the local HTTP server and transparent overlay shell are implemented. CDP transport, platform adapters, and compositor directories contain boundary notes for future work. No license choice, installer, OAuth workflow, or real chat integration has been made.
+The local server, transparent native-proof page, scoped CDP/context transport, and one-pair native measurement/placement diagnostic are implemented. A synthetic Chromium harness exercises isolated-frame and shared-session paths. Production platform adapters and compositor are not implemented. See `docs/feasibility-proof.md` for evidence and the remaining OBS/native-platform gate. No license choice, installer, OAuth workflow, or real chat integration has been made.

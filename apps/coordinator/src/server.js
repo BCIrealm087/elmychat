@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 
 const overlay = readFileSync(new URL('../../overlay/index.html', import.meta.url));
+const proof = readFileSync(new URL('../../overlay/proof.html', import.meta.url));
 
 /** Create a server without listening, so tests and later orchestration own its lifecycle. */
 export function createCoordinatorServer() {
@@ -18,9 +19,9 @@ export function createCoordinatorServer() {
     // Fixed routes only: do not translate untrusted URLs into filesystem paths.
     const pathname = request.url?.split('?')[0];
     let body;
-    if (pathname === '/') {
+    if (pathname === '/' || pathname === '/proof') {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      body = overlay;
+      body = pathname === '/' ? overlay : proof;
     } else if (pathname === '/health') {
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       body = JSON.stringify({ status: 'ok', phase: 'scaffold', chatConnected: false });

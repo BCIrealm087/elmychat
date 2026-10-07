@@ -2,7 +2,7 @@
 
 ## Objective and status
 
-Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. This document captures the attached design discussion as a proposal. The HTTP shell is implemented; browser attachment and native composition are unverified.
+Preserve native Twitch and YouTube message rendering while presenting one ordered stream with arbitrary transparent gaps in OBS. This document captures the attached design discussion as a proposal. The HTTP shell and scoped one-pair CDP probe are implemented. The synthetic harness tests attachment and pixel composition in Chromium; actual OBS/native-platform feasibility remains unverified. See [evidence](feasibility-proof.md).
 
 OBS documents that Browser Source is based on CEF and accepts CEF flags, and describes transparent backgrounds in its default CSS. That establishes a useful starting point, not proof that a given OBS build exposes usable debugging sessions or transparent nested platform frames. CDP documents target attachment and execution-context evaluation; the exact OBS transport and frame behavior must be tested.
 

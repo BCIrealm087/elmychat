@@ -1,0 +1,17 @@
+{
+  "endpoint": "http://127.0.0.1:9222",
+  "targetUrl": "http://127.0.0.1:3210/proof?twitch=YOUR_CHANNEL&youtube=YOUR_VIDEO_ID",
+  "gap": 120,
+  "sources": [
+    {
+      "id": "twitch",
+      "urlPrefix": "https://www.twitch.tv/embed/",
+      "selector": "[data-a-target=\"chat-line-message\"]"
+    },
+    {
+      "id": "youtube",
+      "urlPrefix": "https://www.youtube.com/live_chat",
+      "selector": "yt-live-chat-text-message-renderer"
+    }
+  ]
+}

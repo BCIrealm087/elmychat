@@ -15,6 +15,10 @@ test('the starter serves its overlay and health without exposing other files', a
   assert.match(overlay.headers.get('content-type'), /^text\/html/);
   assert.match(await overlay.text(), /Native Twitch and YouTube chats are not connected yet/);
 
+  const proof = await fetch(`${base}/proof?twitch=example&youtube=abcdefghijk`);
+  assert.equal(proof.status, 200);
+  assert.match(await proof.text(), /Elmychat native pair proof/);
+
   const health = await fetch(`${base}/health`);
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: 'ok', phase: 'scaffold', chatConnected: false });

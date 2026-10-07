@@ -4,12 +4,23 @@
   "private": true,
   "description": "Experimental native Twitch and YouTube chat composition for OBS",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node apps/coordinator/src/index.js",
     "dev": "node --watch apps/coordinator/src/index.js",
-    "test": "node --test",
+    "test": "node --test test/*.test.js",
+    "test:browser": "node --test test/browser/*.test.js",
+    "proof:synthetic": "node scripts/proof/synthetic.js",
+    "proof:targets": "node scripts/proof/native.js targets",
+    "proof:native": "node scripts/proof/native.js pair",
     "check:syntax": "node scripts/check-syntax.js",
-    "check": "npm run check:syntax && npm test"
+    "check": "npm run check:syntax && npm test",
+    "check:all": "npm run check && npm run test:browser"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0",
+    "pngjs": "7.0.0"
   }
 }

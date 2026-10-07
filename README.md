@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** project foundation. The local server and overlay shell work; platform adapters, browser control, and merged chat are not implemented. Native composition in OBS/CEF remains a hypothesis to validate.
+**Status:** feasibility proof in progress. The local server, scoped browser-control probe, and native pair diagnostic are implemented. Production platform adapters and merged chat are not implemented. Native composition in OBS/CEF remains a hypothesis to validate; see [proof evidence](docs/feasibility-proof.md).
 
 ## Development
 
@@ -17,9 +17,9 @@ npm run check
 npm start
 ```
 
-Open <http://127.0.0.1:3210/> for the transparent starter overlay. The small status label is intentional and will be removed when a real chat view replaces it. <http://127.0.0.1:3210/health> returns the coordinator's bootstrap status. Press Ctrl+C to stop the server. This starter needs no platform credentials, OBS debugging flags, or external npm dependencies.
+Open <http://127.0.0.1:3210/> for the transparent starter overlay. The small status label is intentional and will be removed when a real chat view replaces it. <http://127.0.0.1:3210/health> returns the coordinator's bootstrap status. Press Ctrl+C to stop the server. The starter runtime needs no platform credentials or OBS debugging flags; Playwright and PNG parsing are development-only dependencies for automated rendering verification.
 
-The overlay currently contains no Twitch or YouTube frames. Loading it in OBS verifies only local page serving; it does not demonstrate native chat composition.
+The starter overlay contains no platform frames. The separate `/proof?twitch=CHANNEL&youtube=VIDEO_ID` page loads the two native chat embeds for the bounded diagnostic. Read the [proof procedure and limits](docs/feasibility-proof.md) before using it. Loading either page alone does not demonstrate native composition.
 
 ## Directory structure
 
@@ -30,10 +30,10 @@ The overlay currently contains no Twitch or YouTube frames. Loading it in OBS ve
 | `packages/compositor/` | Future platform-independent ordering, rectangles, and spacers |
 | `packages/adapters/twitch/` | Future Twitch DOM observation and positioning |
 | `packages/adapters/youtube/` | Future YouTube DOM observation and positioning |
-| `packages/browser-control/` | Future CDP target and execution-context management |
+| `packages/browser-control/` | Scoped CDP target/context access and native one-box probe |
 | `test/` | Automated behavioral tests |
 | `test/fixtures/` | Future synthetic DOM fixtures |
-| `scripts/` | Development checks |
+| `scripts/` | Development checks and bounded feasibility harnesses |
 | `docs/` | Architecture, development guidance, and roadmap |
 | `.github/workflows/` | CI for the development branch |
 
