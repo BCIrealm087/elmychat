@@ -11,6 +11,9 @@ function nativeRuntime(options = {}, policy) {
   if (!document.body || typeof ResizeObserver !== 'function') throw new Error('The native document and ResizeObserver must be ready.');
 
   let width = options.width;
+  // Reports address the shared viewport; a platform may wrap its native box
+  // in a narrower column while retaining that same placement coordinate space.
+  const messageWidth = () => Math.min(width, policy.messageWidthLimit ?? width);
   let status = 'running';
   let failure = null;
   let frame = null;
@@ -121,12 +124,12 @@ function nativeRuntime(options = {}, policy) {
     let clip = 'none';
     if (visible) {
       const { rect, clip: area } = placement;
-      const offsets = [area.y - rect.y, rect.x + rect.width - area.x - area.width, rect.y + rect.height - area.y - area.height, area.x - rect.x].map((value) => Math.max(0, value));
+      const offsets = [area.y - rect.y, rect.x + messageWidth() - area.x - area.width, rect.y + rect.height - area.y - area.height, area.x - rect.x].map((value) => Math.max(0, value));
       clip = `inset(${offsets.map((value) => `${value}px`).join(' ')})`;
     }
     return {
       position: 'fixed', top: `${placement?.rect.y ?? 0}px`, left: `${placement?.rect.x ?? 0}px`,
-      width: `${width}px`, height: 'auto', 'min-width': '0', 'max-width': 'none', 'min-height': '0', 'max-height': 'none',
+      width: `${messageWidth()}px`, height: 'auto', 'min-width': '0', 'max-width': 'none', 'min-height': '0', 'max-height': 'none',
       'box-sizing': 'border-box', margin: '0', visibility: visible ? 'visible' : 'hidden',
       transform: 'none', 'z-index': '2147483647', 'clip-path': clip,
     };
@@ -179,7 +182,7 @@ function nativeRuntime(options = {}, policy) {
         applyStyle(entry.node, rootProperties(entry));
         if (entry.retired) continue;
         const rect = entry.node.getBoundingClientRect();
-        if (!pixel(rect.height) || !pixel(rect.width, true) || Math.abs(rect.width - width) > 1) throw new Error('measurement-width-or-height-invalid');
+        if (!pixel(rect.height) || !pixel(rect.width, true) || Math.abs(rect.width - messageWidth()) > 1) throw new Error('measurement-width-or-height-invalid');
         if (entry.height === null || Math.abs(entry.height - rect.height) > 0.01 || entry.measuredWidth !== width) {
           const first = entry.height === null;
           entry.height = rect.height;
@@ -233,7 +236,7 @@ function nativeRuntime(options = {}, policy) {
   }
 
   const api = Object.freeze({
-    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
+    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, messageWidth: messageWidth(), revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
     takeReports(command) {
       if (!authorized(command)) return rejected('stale-session');
       const events = [...reports.values()];

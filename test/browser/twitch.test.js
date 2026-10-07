@@ -8,6 +8,7 @@ import { Compositor } from '../../packages/compositor/index.js';
 
 const identity = { sourceId: 'twitch:fixture', sessionId: 'one' };
 const fixture = await readFile(new URL('../fixtures/twitch/source.html', import.meta.url), 'utf8');
+const artFixture = await readFile(new URL('../fixtures/twitch/ascii-art.html', import.meta.url), 'utf8');
 let browser;
 before(async () => { browser = await chromium.launch({ channel: 'chromium', headless: true }); });
 after(async () => { if (browser) await browser.close(); });
@@ -47,6 +48,86 @@ function layout(events, viewport = { width: 420, height: 300 }, spacer = 120) {
   }
   return core;
 }
+
+// Measure glyphs without changing the native text or inserting line breaks.
+async function artGeometry(page) {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-a-target="chat-line-message"]');
+    const text = document.querySelector('#art').firstChild;
+    const box = root.getBoundingClientRect();
+    const rows = new Map();
+    const glyphs = [];
+    for (let i = 0; i < text.length; i += 1) {
+      if (text.data[i] !== 'E') continue;
+      const range = document.createRange(); range.setStart(text, i); range.setEnd(text, i + 1);
+      const rect = range.getBoundingClientRect();
+      const y = Math.round((rect.y - box.y) * 100) / 100;
+      rows.set(y, (rows.get(y) ?? '') + text.data[i]);
+      glyphs.push({ x: rect.x - box.x, y, width: rect.width, height: rect.height });
+    }
+    const css = getComputedStyle(root);
+    return { width: box.width, height: box.height, rows: [...rows.values()], glyphs, text: text.data,
+      typography: [css.fontFamily, css.fontSize, css.lineHeight, css.letterSpacing, css.whiteSpace, css.overflowWrap, css.paddingLeft, css.paddingRight] };
+  });
+}
+
+test('Twitch ASCII art retains native sidebar wrapping in wide overlays and remeasures narrow ones', { timeout: 30000 }, async (t) => {
+  const context = await browser.newContext({ viewport: { width: 840, height: 500 } });
+  t.after(() => context.close());
+  const page = await context.newPage();
+  await page.setContent(artFixture);
+  await page.evaluate(() => {
+    globalThis.artRoot = document.querySelector('[data-a-target="chat-line-message"]');
+    globalThis.artText = document.querySelector('#art').firstChild;
+    globalThis.artChildren = [...artRoot.querySelectorAll('*')];
+    globalThis.originalStyles = [...document.querySelectorAll('*')].map(node => [node, node.getAttribute('style')]);
+  });
+  const native = await artGeometry(page);
+  assert.deepEqual(native.rows.map(row => row.length), [34, 34, 12, 12, 34, 34, 12, 12, 34, 34], 'The fixture must exercise the supplied ten-row E.');
+  assert.ok(native.text.includes('\u2800'), 'Keep the supplied Unicode braille blanks.');
+  await page.evaluate(twitchAdapterExpression({ ...identity, width: 840 }));
+  const events = await drain(page);
+  const core = layout(events, { width: 840, height: 500 }, 0);
+  await call(page, 'applyPlacements', { revision: 1, placements: core.layout().placements });
+  await idle(page);
+  assert.deepEqual(await artGeometry(page), native, 'Placement must preserve every native glyph position, line break, space and font metric.');
+  assert.equal(events[0].width, 840, 'Reports still address the shared compositor viewport.');
+  assert.equal(events[0].height, native.height);
+  assert.equal(await page.evaluate(() => __elmychatTwitchAdapterV1.diagnostics().messageWidth), 340);
+  assert.equal(await page.evaluate(() => document.querySelector('#art').firstChild === artText && artChildren.every(node => artRoot.contains(node))), true);
+  await mkdir('.runtime/proof', { recursive: true });
+  await writeFile('.runtime/proof/twitch-ascii-art.png', await page.screenshot({ omitBackground: true }));
+
+  await page.setViewportSize({ width: 600, height: 500 });
+  await call(page, 'setWidth', { width: 600 });
+  const wider = await drain(page);
+  assert.equal(wider.length, 1);
+  assert.equal(wider[0].width, 600);
+  assert.equal(wider[0].messageId, events[0].messageId);
+  assert.deepEqual(await artGeometry(page), native, 'A second wide source must not rewrap the art.');
+  assert.equal(await page.evaluate(() => getComputedStyle(artRoot).visibility), 'hidden');
+  core.setViewport({ width: 600, height: 500 }); core.resizeMessage(wider[0]);
+  await call(page, 'applyPlacements', { revision: 2, placements: core.layout().placements });
+  await idle(page);
+  assert.equal(await page.evaluate(() => getComputedStyle(artRoot).visibility), 'visible');
+
+  await page.setViewportSize({ width: 280, height: 500 });
+  await call(page, 'setWidth', { width: 280 });
+  const narrow = await drain(page);
+  const narrowArt = await artGeometry(page);
+  assert.equal(narrowArt.width, 280);
+  assert.ok(narrowArt.height > native.height, 'Narrow viewports must report the actual rewrapped height.');
+  assert.equal(narrow[0].height, narrowArt.height);
+  assert.equal(narrow[0].messageId, events[0].messageId);
+  core.setViewport({ width: 280, height: 80 }); core.resizeMessage(narrow[0]);
+  await call(page, 'applyPlacements', { revision: 3, placements: core.layout().placements });
+  await idle(page);
+  const clipped = PNG.sync.read(await page.screenshot({ omitBackground: true }));
+  for (let y = 80; y < clipped.height; y += 1) for (let x = 0; x < clipped.width; x += 1) assert.equal(clipped.data[(y * clipped.width + x) * 4 + 3], 0);
+  await call(page, 'stop');
+  assert.equal(await page.evaluate(() => originalStyles.every(([node, style]) => node.getAttribute('style') === style)), true);
+  assert.deepEqual(await artGeometry(page), native, 'Stopping restores the native sidebar layout.');
+});
 
 test('Twitch discovery, compositor placement and clipping preserve native roots and paint a transparent gap', { timeout: 30000 }, async (t) => {
   const page = await setup(t);
