@@ -2,7 +2,7 @@
 
 `index.js` implements a self-contained browser-injected adapter for native **ordinary text message roots**. It preserves each root and its descendants inside Twitch's document. It observes arrivals/removal/reuse with MutationObserver, measures at the shared width with ResizeObserver, and applies compositor rectangles, hiding and clipping. It does not clone, reparent, render, send, or archive messages. Production coordinator wiring is step 5; the existing static proof command is unchanged.
 
-The lifecycle is now shared with YouTube through `../native-runtime.js`; Twitch discovery and identity policy stay here. A Node factory compiles the runtime and fixed policy into the same dependency-free injectable function, preserving direct browser evaluation and the existing API. Reports additionally carry `messageKind: 'text'` as diagnostic metadata. Discovery admits outermost matched roots, preventing nested copies from becoming separate arrivals. The full existing Twitch browser suite verifies this extraction in CI alongside the YouTube suite.
+The lifecycle is now shared with YouTube through `../native-runtime.js`; Twitch discovery and identity policy stay here. A Node factory compiles the runtime and fixed policy into the same dependency-free injectable function, preserving direct browser evaluation and the existing API. Reports additionally carry `messageKind: 'text'` as diagnostic metadata. Discovery admits outermost matched roots, preventing nested copies from becoming separate arrivals. All eight Twitch browser tests passed again on Windows/Linux in [CI run 37617532360](https://github.com/BCIrealm087/elmychat/actions/runs/37617532360), code commit `4d691b4`, verifying this extraction alongside the YouTube suite.
 
 ## Injection and report contract
 
