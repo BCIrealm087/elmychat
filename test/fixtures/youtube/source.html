@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+html, body { margin: 0; background: #27272a; }
+yt-live-chat-item-list-renderer { display: block; transform: translateY(35px); contain: paint; overflow: hidden; height: 55px; background: yellow; }
+#items { background: orange; }
+#items > * { display: block; padding: 4px; margin: 3px; color: white; font: 16px/20px sans-serif; background: #c83232; }
+#items > yt-live-chat-paid-message-renderer { background: #3264c8; }
+#items > yt-live-chat-paid-sticker-renderer { background: #207020; }
+#items > yt-live-chat-membership-item-renderer { background: #604080; }
+#items > yt-live-chat-sponsorships-gift-purchase-announcement-renderer { background: #806020; }
+#items > yt-live-chat-sponsorships-gift-redemption-announcement-renderer { background: #205070; }
+.media { display: inline-block; width: 8px; height: 8px; background: blue; vertical-align: bottom; }
+.chrome { display: block; height: 100px; background: yellow; }
+</style></head><body>
+<div class="chrome"><yt-live-chat-paid-message-renderer id="ticker-copy">Synthetic duplicate ticker</yt-live-chat-paid-message-renderer></div>
+<yt-live-chat-item-list-renderer style="letter-spacing: 0.2px;"><div id="items">
+  <yt-live-chat-text-message-renderer id="native-text" style="color: white;"><b>Fixture text</b> <span class="media"></span></yt-live-chat-text-message-renderer>
+  <yt-live-chat-paid-message-renderer id="native-paid"><b>Fixture paid card</b><br><span>Native card descendants</span></yt-live-chat-paid-message-renderer>
+  <yt-live-chat-paid-sticker-renderer id="native-sticker"><b>Fixture sticker</b> <span class="media"></span></yt-live-chat-paid-sticker-renderer>
+  <yt-live-chat-membership-item-renderer id="native-membership"><b>Fixture membership</b><br><span>Native card descendants</span></yt-live-chat-membership-item-renderer>
+  <yt-live-chat-sponsorships-gift-purchase-announcement-renderer id="native-gift-purchase"><b>Fixture gift purchase</b></yt-live-chat-sponsorships-gift-purchase-announcement-renderer>
+  <yt-live-chat-sponsorships-gift-redemption-announcement-renderer id="native-gift-redemption"><b>Fixture gift redemption</b></yt-live-chat-sponsorships-gift-redemption-announcement-renderer>
+  <yt-live-chat-placeholder-item-renderer id="unsupported">Unsupported synthetic placeholder</yt-live-chat-placeholder-item-renderer>
+</div></yt-live-chat-item-list-renderer>
+<script>
+globalThis.lifecycle = { connected: 0, disconnected: 0 };
+for (const node of [...document.querySelector('#items').children].filter(node => node.id !== 'unsupported')) {
+  const tag = node.localName;
+  if (!customElements.get(tag)) customElements.define(tag, class extends HTMLElement {
+    connectedCallback() { lifecycle.connected += 1; }
+    disconnectedCallback() { lifecycle.disconnected += 1; }
+  });
+}
+globalThis.nativeRoots = [...document.querySelector('#items').children].filter(node => node.id !== 'unsupported');
+globalThis.nativeDescendants = nativeRoots.map(root => [...root.querySelectorAll('*')]);
+globalThis.originalParents = nativeRoots.map(root => root.parentNode);
+globalThis.beforeStyles = [...document.querySelectorAll('*')].map(node => [node, node.getAttribute('style'), node.style.cssText]);
+globalThis.baselineLifecycle = { ...lifecycle };
+</script>
+</body></html>

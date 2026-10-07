@@ -28,6 +28,8 @@ Synthetic browser checks establish browser mechanics, not actual OBS, Twitch/You
 
 The Twitch browser suite uses `test/fixtures/twitch/source.html` and the actual serialized adapter injection. It exercises discovery, compositor placement and pixel clipping/alpha, delayed native resizing, removal/reuse, style rewrites, session/revision rejection, bounds failures and teardown. The fixture does not reproduce live Twitch. `npm run test:browser` runs this suite alongside the cross-origin proof; CI artifacts include the synthetic Twitch report/screenshot. The static `proof:native` command does not install the continuous adapter.
 
+The YouTube suite uses `test/fixtures/youtube/source.html` and the actual compiled/serialized adapter. It covers six text/special host candidates, custom-element lifecycle, natural card/closed-shadow sizing, root/list replacement, ticker/nested exclusion, clipping/alpha, stale commands, bounds and teardown. Both adapters use a shared native lifecycle engine; rerun both suites when changing it. The tags/scope in this fixture are synthetic candidates, not a live YouTube DOM guarantee. CI artifacts also include the synthetic YouTube report/screenshot.
+
 ## Local state
 
 Future persisted runtime data belongs in `.runtime/`; browser profiles belong in `browser-profiles/`. Both are ignored. No credentials or environment configuration are needed for this scaffold. Keep the HTTP service and future debugging interface on loopback, and avoid operating unrelated browser sessions.

@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS; the pure compositor and Twitch text-root adapter are implemented and CI-verified on Windows/Linux. The adapter observes native roots, reports measurements/removal, applies layout/clipping and restores styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The components are not yet wired into a live merged chat; Twitch special rows are unsupported. See [proof evidence and limitations](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), and [Twitch adapter support](packages/adapters/twitch/README.md).
+**Status:** bounded native composition proved in OBS; the pure compositor and both platform adapters are implemented. The YouTube adapter and shared-lifecycle extraction are being CI-verified. Adapters observe native roots, report measurements/removal, apply layout/clipping and restore styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The components are not yet wired into a live merged chat; Twitch special rows are unsupported and YouTube special roots remain synthetic candidates. See [proof evidence](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), [Twitch support](packages/adapters/twitch/README.md), and [YouTube support](packages/adapters/youtube/README.md).
 
 ## Development
 
@@ -29,7 +29,8 @@ The starter overlay contains no platform frames. The separate `/proof?twitch=CHA
 | `apps/overlay/` | Transparent page loaded by the OBS Browser Source |
 | `packages/compositor/` | Pure platform-independent ordering, rectangles, spacers, visibility, and bounded history |
 | `packages/adapters/twitch/` | Injected Twitch text-root lifecycle, measurement, positioning, clipping and teardown |
-| `packages/adapters/youtube/` | Future YouTube DOM observation and positioning |
+| `packages/adapters/youtube/` | Injected YouTube text/special host candidates, scoped discovery and native positioning |
+| `packages/adapters/native-runtime.js` | Shared bounded observer, measurement, style ownership, reports and teardown |
 | `packages/browser-control/` | Scoped CDP target/context access and native one-box probe |
 | `test/` | Automated behavioral tests |
 | `test/fixtures/` | Future synthetic DOM fixtures |
