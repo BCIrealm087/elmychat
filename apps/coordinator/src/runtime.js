@@ -63,6 +63,7 @@ export class NativeCoordinator {
   #cleanup = [];
   #sourceStates = new Map();
   #controls = [];
+  #activity = { connections: 0, sessionsStarted: 0, reportsProcessed: 0, layoutWrites: 0, lastCycleMs: 0, longestCycleMs: 0 };
 
   constructor(config, { openPage = NativePage.open, clock = () => performance.now() } = {}) {
     this.config = validateRuntimeConfig(config);
@@ -77,7 +78,13 @@ export class NativeCoordinator {
       status: this.#stopping ? 'stopped' : this.#lastError ? 'waiting' : this.#page ? 'connected' : 'waiting',
       targetId: this.#pinnedId ?? null, cycles: this.#cycles, lastError: this.#lastError,
       chatConnected: !this.#stopping && !this.#page?.disconnected && sources.every((source) => source.status === 'running'),
-      sources, layout: this.compositor.layout(), cleanup: this.#cleanup,
+      sources, layout: this.compositor.layout(), cleanup: this.#cleanup.map((entry) => ({ ...entry })),
+      resources: {
+        retainedEntries: this.compositor.size, activeSessions: this.#records.size,
+        blockedSources: this.#blocked.size, pendingControls: this.#controls.length, cleanupEntries: this.#cleanup.length,
+      },
+      bounds: { history: this.config.maxEntries, sources: 2, rootsPerSource: 500, reportsPerSource: 1000, styledNodesPerSource: 4096, spacers: 32, pendingControls: 32, cleanup: 16 },
+      activity: { ...this.#activity },
     };
   }
 
@@ -157,6 +164,7 @@ export class NativeCoordinator {
   }
 
   async #cycle() {
+    const started = this.#clock();
     this.#cycles += 1;
     const retired = new Map();
     const replies = [];
@@ -171,6 +179,7 @@ export class NativeCoordinator {
       if (this.#page?.disconnected) await this.#disconnect('transport-disconnected');
       if (!this.#page) {
         this.#page = await this.#open(this.config, this.#pinnedId);
+        this.#activity.connections += 1;
         this.#pinnedId ??= this.#page.target.id;
         this.#targetUrl ??= this.config.targetUrl ?? this.#page.target.url;
       }
@@ -216,6 +225,7 @@ export class NativeCoordinator {
               continue;
             }
             this.compositor.activateSource(source.id, record.sessionId);
+            this.#activity.sessionsStarted += 1;
           }
           if (tops[0].width > 0 && record.width !== tops[0].width) {
             await this.#command(record, 'setWidth', { width: tops[0].width });
@@ -232,11 +242,13 @@ export class NativeCoordinator {
             else if (event.type === 'removed') result = this.compositor.removeMessage(report);
             else throw new Error('Unknown adapter report type.');
             this.#collectRetirements(result, retired);
+            this.#activity.reportsProcessed += 1;
           }
           this.#sourceStates.set(source.id, {
             status: batch.diagnostics?.waitingForContainer ? 'waiting' : 'running',
             sessionId: record.sessionId, waitingForContainer: batch.diagnostics?.waitingForContainer ?? false,
             trackedRoots: batch.diagnostics?.trackedRoots ?? null,
+            adapter: batch.diagnostics ? Object.fromEntries(['trackedRoots', 'retiredRoots', 'pendingReports', 'styledNodes', 'added', 'removed', 'resized', 'styleRepairs', 'flushes'].map((key) => [key, batch.diagnostics[key] ?? null])) : null,
           });
         } catch (error) {
           this.#blocked.set(source.id, { context, reason: error.message });
@@ -268,6 +280,7 @@ export class NativeCoordinator {
             try {
               await this.#command(record, 'applyPlacements', { revision: ++record.revision, placements });
               record.snapshot = snapshot;
+              this.#activity.layoutWrites += 1;
             } catch (error) {
               failed = true;
               this.#blocked.set(sourceId, { context: record.context, reason: error.message });
@@ -284,6 +297,8 @@ export class NativeCoordinator {
       this.#lastError = error.message;
       await this.#disconnect(error.message);
     }
+    this.#activity.lastCycleMs = Math.max(0, this.#clock() - started);
+    this.#activity.longestCycleMs = Math.max(this.#activity.longestCycleMs, this.#activity.lastCycleMs);
     for (const { resolve, result } of replies) resolve(result);
     return this.diagnostics();
   }

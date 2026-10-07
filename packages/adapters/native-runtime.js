@@ -233,14 +233,12 @@ function nativeRuntime(options = {}, policy) {
   }
 
   const api = Object.freeze({
-    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, revision, trackedRoots: roots.size, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
+    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
     takeReports(command) {
       if (!authorized(command)) return rejected('stale-session');
       const events = [...reports.values()];
-      for (const event of events) if (event.type === 'added') {
-        const entry = [...roots.values()].find((candidate) => candidate.messageId === event.messageId);
-        if (entry) entry.delivered = true;
-      }
+      // Mark delivered roots in one pass, including coalesced add/resize reports.
+      if (events.length) for (const entry of roots.values()) if (reports.get(entry.messageId)?.type === 'added') entry.delivered = true;
       reports.clear();
       return { accepted: true, status, failure, events };
     },

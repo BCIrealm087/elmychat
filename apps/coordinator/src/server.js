@@ -32,6 +32,7 @@ function readBody(request) {
 /** Fixed loopback routes; writes require same origin, JSON and a server nonce. */
 export function createCoordinatorServer({ health = () => ({ status: 'ok', phase: 'scaffold', chatConnected: false }), operator } = {}) {
   const token = randomUUID();
+  let activeControls = 0;
   return createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -48,13 +49,17 @@ export function createCoordinatorServer({ health = () => ({ status: 'ok', phase:
       if (operator && request.method === 'POST' && ['/api/config', '/api/connect', '/api/disconnect', '/api/spacing'].includes(pathname)) {
         if (request.headers.origin !== `http://${host}` || request.headers['x-elmychat-token'] !== token) throw denied('Open the local controls page to perform this action.', 403);
         if (request.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw denied('Send application/json.', 415);
-        const input = await readBody(request);
-        let state;
-        if (pathname === '/api/config') state = await operator.configure(input);
-        else if (pathname === '/api/connect') state = await operator.connect();
-        else if (pathname === '/api/disconnect') state = await operator.disconnect();
-        else state = await operator.spacing(input);
-        send(200, { ...state, token });
+        if (activeControls >= 16) throw denied('Too many active control requests; retry after pending requests finish.', 503);
+        activeControls += 1;
+        try {
+          const input = await readBody(request);
+          let state;
+          if (pathname === '/api/config') state = await operator.configure(input);
+          else if (pathname === '/api/connect') state = await operator.connect();
+          else if (pathname === '/api/disconnect') state = await operator.disconnect();
+          else state = await operator.spacing(input);
+          send(200, { ...state, token });
+        } finally { activeControls -= 1; }
         return;
       }
       if (request.method !== 'GET' && request.method !== 'HEAD') {

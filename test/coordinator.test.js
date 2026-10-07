@@ -268,3 +268,55 @@ test('source query selection ignores parameter order but rejects a different vid
   await runtime.step(); assert.equal(runtime.diagnostics().sources[1].status, 'waiting');
   await runtime.stop();
 });
+
+test('sustained reports and repeated generations keep history, sessions and cleanup bounded; idle cycles do not write layouts', async () => {
+  const { page, runtime } = await attached({ maxEntries: 64 });
+  for (let batch = 0; batch < 240; batch += 1) {
+    for (let i = 0; i < 100; i += 1) page.publish(i % 2 + 1, 'added', `${batch}:${i}`);
+    await runtime.step();
+    const state = runtime.diagnostics();
+    assert.equal(state.resources.retainedEntries, 64);
+    assert.equal(state.resources.activeSessions, 2);
+    assert.ok(state.resources.cleanupEntries <= 16);
+    assert.equal(state.resources.pendingControls, 0);
+    assert.equal(state.layout.placements.at(-1).rect.y + 28, 600);
+    if (batch % 8 === 7) {
+      const prior = page.frames[1].context;
+      page.frames[1] = { ...page.frames[1], context: {} };
+      await runtime.step();
+      page.sessions.delete(prior); page.buffers.delete(prior);
+    }
+    page.calls.length = 0;
+  }
+  const active = runtime.diagnostics();
+  assert.equal(active.activity.reportsProcessed, 24000);
+  assert.equal(active.activity.sessionsStarted, 32);
+  assert.equal(active.cleanup.length, 16);
+  active.cleanup[0].reason = 'external mutation'; active.cleanup.length = 0;
+  assert.equal(runtime.diagnostics().cleanup.length, 16);
+  assert.notEqual(runtime.diagnostics().cleanup[0].reason, 'external mutation');
+  for (let i = 0; i < 120; i += 1) await runtime.step();
+  const idle = runtime.diagnostics();
+  assert.equal(idle.activity.layoutWrites, active.activity.layoutWrites);
+  assert.equal(idle.activity.reportsProcessed, active.activity.reportsProcessed);
+  assert.equal(idle.cycles, active.cycles + 120);
+  assert.ok(Number.isFinite(idle.activity.longestCycleMs));
+  const stopped = await runtime.stop();
+  assert.equal(stopped.resources.retainedEntries, 0);
+  assert.equal(stopped.resources.activeSessions, 0);
+  assert.ok(stopped.cleanup.slice(-2).every((entry) => entry.restored));
+});
+
+test('spacing pressure rejects excess commands and shutdown settles every queued request', async () => {
+  const { page, runtime } = await attached();
+  let release; const gate = new Promise((done) => { release = done; });
+  page.describe = async () => { await gate; return page.frames; };
+  const cycle = runtime.step();
+  const pending = Array.from({ length: 32 }, (_, height) => assert.rejects(runtime.control({ type: 'gap', height }), /stopped/));
+  await assert.rejects(runtime.control({ type: 'gap', height: 100 }), /Too many pending/);
+  assert.equal(runtime.diagnostics().resources.pendingControls, 32);
+  const stop = runtime.stop(); release();
+  await Promise.all([cycle, stop, ...pending]);
+  assert.equal(runtime.diagnostics().resources.pendingControls, 0);
+  assert.equal(runtime.config.gap, 12);
+});

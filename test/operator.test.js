@@ -19,6 +19,34 @@ async function controller(t, options = {}) {
   return { operator, statePath };
 }
 
+test('incomplete HTTP controls are bounded while health remains readable and completed requests release capacity', { timeout: 15000 }, async (t) => {
+  const { operator } = await controller(t);
+  const server = createCoordinatorServer({ operator, health: () => operator.health() });
+  const pending = [];
+  t.after(async () => { for (const request of pending) request.destroy(); server.closeAllConnections(); await new Promise((done) => server.close(done)); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { token } = await (await fetch(`${base}/api/state`)).json();
+  const headers = { Origin: base, 'X-Elmychat-Token': token, 'Content-Type': 'application/json' };
+  const replies = [];
+  for (let i = 0; i < 16; i += 1) {
+    const request = httpRequest(`${base}/api/connect`, { method: 'POST', headers: { ...headers, Expect: '100-continue' } });
+    request.on('error', () => {}); pending.push(request);
+    replies.push(new Promise((done) => request.on('response', (response) => { response.resume(); response.on('end', () => done(response.statusCode)); })));
+    const ready = once(request, 'continue'); request.flushHeaders(); await ready;
+    request.write('{');
+  }
+  const rejected = await fetch(`${base}/api/connect`, { method: 'POST', headers, body: '{}' });
+  assert.equal(rejected.status, 503); await rejected.text();
+  assert.equal((await (await fetch(`${base}/health`)).json()).status, 'idle');
+  assert.equal(operator.state().configured, false);
+  for (const request of pending) request.end('}');
+  assert.ok((await Promise.all(replies)).every((status) => status === 409));
+  const accepted = await fetch(`${base}/api/config`, { method: 'POST', headers, body: JSON.stringify(settings) });
+  assert.equal(accepted.status, 200); await accepted.json();
+  assert.equal(operator.state().config.channel, 'example_channel');
+});
+
 test('operator settings normalize video links and constrain source identity and connection limits', () => {
   const config = normalizeOperatorConfig(settings);
   assert.equal(config.channel, 'example_channel'); assert.equal(config.videoId, 'abcdefghijk');

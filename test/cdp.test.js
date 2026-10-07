@@ -50,3 +50,20 @@ test('context IDs are session-scoped and retired contexts cannot receive placeme
   frames.stop();
   assert.equal(connection.listenerCount('event'), 0);
 });
+
+test('CDP command pressure is bounded and timed-out slots recover without accepting late replies', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const socket = new Socket();
+  const connection = new CdpConnection(socket);
+  t.after(() => connection.close());
+  const pending = Array.from({ length: 64 }, () => assert.rejects(connection.send('Runtime.evaluate'), /timed out/));
+  await assert.rejects(connection.send('Runtime.enable'), /Too many pending/);
+  assert.equal(socket.sent.length, 64, 'Rejected work must never reach the socket.');
+  t.mock.timers.tick(5000); await Promise.all(pending);
+  socket.reply({ id: socket.sent[0].id, result: { obsolete: true } });
+  const recovered = connection.send('Runtime.enable');
+  socket.reply({ id: socket.sent.at(-1).id, result: { recovered: true } });
+  assert.deepEqual(await recovered, { recovered: true });
+  const disconnected = assert.rejects(connection.send('Runtime.evaluate'), /closed/);
+  connection.close(); await disconnected;
+});
