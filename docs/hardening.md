@@ -6,6 +6,8 @@ Step 7 hardens resource ownership and diagnostics, and adds accelerated load/rec
 
 Report delivery marks newly delivered roots in one pass through the tracked collection, rather than searching the collection once per added event. Coalesced add/resize reports retain the existing identity/removal semantics. Cleanup snapshots returned by diagnostics are copied so a consumer cannot alter retained restoration evidence.
 
+Shutdown also removes current-run spacers from the stopped runtime and diagnostic snapshot. Disconnected controls therefore show no obsolete spacers, consistent with their documented lifecycle. Routine console logs continue to reflect connection/source status rather than every diagnostic counter update.
+
 The HTTP server admits at most 16 active control requests, including incomplete bodies and actions waiting to finish. Excess authenticated writes receive HTTP 503 and may be retried after capacity becomes available. The existing action queue remains separately bounded. GET health remains available during this pressure. No unbounded queue is added.
 
 ## Resource boundaries

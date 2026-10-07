@@ -255,7 +255,9 @@ test('spacer and command limits are explicit and do not mutate accepted spacing'
   for (let i = 0; i < 32; i += 1) await runtime.control({ type: 'spacer-add', height: i });
   await assert.rejects(runtime.control({ type: 'spacer-add', height: 1 }), /32 retained spacers/);
   assert.equal(runtime.compositor.layout().spacers.length, 32);
-  await runtime.stop();
+  const stopped = await runtime.stop();
+  assert.equal(stopped.layout.spacers.length, 0);
+  assert.equal(stopped.resources.retainedEntries, 0);
 });
 
 test('source query selection ignores parameter order but rejects a different video', async () => {

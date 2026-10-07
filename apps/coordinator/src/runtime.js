@@ -307,7 +307,12 @@ export class NativeCoordinator {
     if (this.#stopWork) return this.#stopWork;
     this.#stopping = true;
     for (const command of this.#controls.splice(0)) command.reject(new Error('Coordinator is stopped.'));
-    this.#stopWork = (async () => { await this.#work; await this.#disconnect('teardown'); return this.diagnostics(); })();
+    this.#stopWork = (async () => {
+      await this.#work;
+      await this.#disconnect('teardown');
+      for (const entry of this.compositor.entries()) if (entry.kind === 'spacer') this.compositor.removeSpacer(entry.spacerId);
+      return this.diagnostics();
+    })();
     return this.#stopWork;
   }
 }

@@ -67,10 +67,14 @@ test('saved sources, gap and enabled state reload, while inserted spacers belong
   assert.equal(saved.enabled, true); assert.equal(saved.config.gap, 64.5);
   assert.equal(saved.spacers, undefined);
   await operator.close();
+  assert.equal(operator.state().spacers.length, 0);
   const reloaded = new OperatorController({ statePath, createRuntime: factory });
   t.after(() => reloaded.close()); await reloaded.load();
   assert.equal(reloaded.state().enabled, true); assert.equal(reloaded.state().gap, 64.5); assert.equal(reloaded.state().spacers.length, 0);
+  await reloaded.spacing({ type: 'spacer-add', height: 80 });
+  assert.equal(reloaded.state().spacers.length, 1);
   await reloaded.disconnect();
+  assert.equal(reloaded.state().spacers.length, 0);
   const disabled = new OperatorController({ statePath, createRuntime: factory });
   t.after(() => disabled.close()); await disabled.load();
   assert.equal(disabled.state().enabled, false);
