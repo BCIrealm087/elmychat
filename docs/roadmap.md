@@ -1,6 +1,6 @@
 # Initial roadmap
 
-This sequence prioritizes the native-rendering feasibility question. Steps 0 and 1 are complete, with automated and native OBS evidence tracked in [proof evidence](feasibility-proof.md). Step 1 proves bounded static composition; short, inconsistent message lifetime remains unresolved for the adapters and coordinator. Step 2 is next.
+This sequence prioritizes the native-rendering feasibility question. Steps 0 and 1 are complete, with automated and native OBS evidence tracked in [proof evidence](feasibility-proof.md). Step 1 proves bounded static composition; short, inconsistent message lifetime remains unresolved for the adapters and coordinator. Step 2's core is implemented and passed local checks; Windows/Linux CI verification is pending.
 
 Use automatic development cycles and stable numbering. Complete implementation, automated verification, CI, and relevant documentation for each step. Include manual operator testing only when omitting it creates a critical risk; automate or simulate all other validation. The native OBS composition result is one critical architectural gate, not a routine manual requirement for later steps.
 
@@ -8,7 +8,7 @@ Use automatic development cycles and stable numbering. Complete implementation, 
 | --- | --- | --- |
 | 0. Project foundation | Branch, docs, component boundaries, local overlay server, checks and CI definition | Local checks pass; files are committed on `codex-startup`; remote publication/CI confirmed separately |
 | 1. OBS/CEF capability proof — complete | Implement scoped CDP attachment and a one-pair diagnostic; automate cross-origin composition and teardown checks; then resolve actual OBS/native embedding | Browser tests and CI pass; operator confirmed native pair, scene alpha and restoration with CEF 127 / CDP 1.3; OBS was reported as latest without an exact version; persistence limitation recorded |
-| 2. Compositor core | Arrival sequencing, measured rectangles, bottom alignment, spacers, visibility, bounded history | Pure behavioral tests for ordering, ties, gaps, viewport bounds, resizing and removal |
+| 2. Compositor core — CI pending | Arrival sequencing, measured rectangles, bottom alignment, spacers, visibility, bounded history | Pure behavioral tests pass locally for ordering, ties, gaps, viewport bounds, resizing, removal, stale source sessions and retention; see the [API contract](../packages/compositor/README.md) |
 | 3. Twitch adapter | Native message observation, identity, positioning, resizing, removal, and teardown | Synthetic tests plus documented live selector evidence and unsupported cases |
 | 4. YouTube adapter | Equivalent lifecycle, including special native message roots | Synthetic tests plus documented text/special-message behavior and unsupported cases |
 | 5. End-to-end coordinator | Wire reports to placements; manage sessions, reconnect, navigation, refresh, and unload | Automated lifecycle tests; measured native composition in the proven environment |

@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS. The local server, scoped browser-control probe, and native pair diagnostic are implemented. The operator confirmed two native messages, transparent spacing and restoration; message persistence was inconsistent. Production platform adapters and stable merged chat are not implemented. See [proof evidence and limitations](docs/feasibility-proof.md).
+**Status:** bounded native composition proved in OBS; the pure compositor core is implemented. The operator confirmed two native messages, transparent spacing and restoration; message persistence was inconsistent. The core now provides arrival order, bottom-aligned rectangles, transparent spacers, clipping and bounded history. It is not yet connected to native sources. Production platform adapters and stable merged chat are not implemented. See [proof evidence and limitations](docs/feasibility-proof.md) and the [compositor contract](packages/compositor/README.md).
 
 ## Development
 
@@ -27,7 +27,7 @@ The starter overlay contains no platform frames. The separate `/proof?twitch=CHA
 | --- | --- |
 | `apps/coordinator/src/` | Local HTTP entry point; future browser sessions and orchestration |
 | `apps/overlay/` | Transparent page loaded by the OBS Browser Source |
-| `packages/compositor/` | Future platform-independent ordering, rectangles, and spacers |
+| `packages/compositor/` | Pure platform-independent ordering, rectangles, spacers, visibility, and bounded history |
 | `packages/adapters/twitch/` | Future Twitch DOM observation and positioning |
 | `packages/adapters/youtube/` | Future YouTube DOM observation and positioning |
 | `packages/browser-control/` | Scoped CDP target/context access and native one-box probe |
@@ -45,7 +45,7 @@ Keep each chat's native message elements inside its own document. Give both surf
 
 Initial ordering uses arrival at the coordinator, with a monotonic sequence to break ties. Platform send-time ordering is a separate future decision. The compositor must not copy message HTML or recreate platform rendering.
 
-The first milestone is a small OBS/CEF feasibility proof: attach to both native chat contexts, detect and measure one message from each, and position them with a transparent gap in a single view. Embedded-frame transparency, clipping, native layout interference, and target lifecycle handling need evidence before a full implementation.
+The first milestone proved bounded native composition in OBS: attach to both native chat contexts, detect and measure one message from each, and position them with a transparent gap in a single view. The pure compositor now defines the layout policy for future adapters. Continued native message survival, native clipping, layout interference, and target lifecycle handling remain adapter/coordinator work.
 
 Read [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and [development guidance](docs/development.md). Contributor and agent rules are in [AGENTS.md](AGENTS.md).
 
