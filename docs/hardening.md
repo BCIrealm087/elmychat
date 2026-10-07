@@ -1,6 +1,6 @@
 # Hardening and milestone boundary
 
-Step 7 hardens resource ownership and diagnostics, and adds accelerated load/recovery verification. The implementation and Node checks are complete; Windows/Linux browser verification is pending. This is a bounded development milestone, not a claim of prolonged live OBS stability.
+Step 7 hardens resource ownership and diagnostics, and adds accelerated load/recovery verification. Windows/Linux [CI run 37676706252](https://github.com/BCIrealm087/elmychat/actions/runs/37676706252), commit `c53dec7`, passed all 42 Node and 24 browser tests on each OS with no skipped tests. The step is complete for its bounded scope. This is a bounded development milestone, not a claim of prolonged live OBS stability.
 
 ## Changes
 

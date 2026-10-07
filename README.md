@@ -2,7 +2,9 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS; the pure compositor and both platform adapters are implemented and CI-verified on Windows/Linux. Adapters observe native roots, report measurements/removal, apply layout/clipping and restore styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The step 5 coordinator now connects both adapters to the compositor; 48 step 5 automated tests passed on Windows/Linux. Step 6 controls are complete for their bounded scope: saved sources, a managed overlay and live gaps/spacers passed all 61 automated tests per OS in Windows/Linux [CI run 37635603023](https://github.com/BCIrealm087/elmychat/actions/runs/37635603023). The operator also confirmed combined live scrolling, emotes, transparency, refresh recovery and restoration, completing step 5’s bounded gate. Prolonged stability remains unverified. Twitch special rows are unsupported and YouTube special roots remain synthetic candidates. See [proof evidence](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), [Twitch support](packages/adapters/twitch/README.md), and [YouTube support](packages/adapters/youtube/README.md).
+**Status:** the initial development milestone (steps 0–7) is complete for its bounded scope. Native composition was observed in OBS, including merged scrolling, emotes/transparency, refresh recovery and restoration. Saved source configuration, the managed overlay, live gaps/spacers and resource/lifecycle hardening passed all **66 automated tests per OS** in Windows/Linux [CI run 37676706252](https://github.com/BCIrealm087/elmychat/actions/runs/37676706252). See the [operator workflow](docs/operator-controls.md) and [hardening evidence and support limits](docs/hardening.md).
+
+Prolonged live stability and broader OBS compatibility remain unverified. Twitch special rows are unsupported; YouTube special roots and native identity-recycling policies retain synthetic coverage only. The earlier static-probe persistence issue remains undiagnosed, while the bounded continuous gate passed. See [proof evidence](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), [Twitch support](packages/adapters/twitch/README.md), and [YouTube support](packages/adapters/youtube/README.md).
 
 ## Development
 
@@ -46,7 +48,7 @@ Keep each chat's native message elements inside its own document. Give both surf
 
 Initial ordering uses arrival at the coordinator, with a monotonic sequence to break ties. Platform send-time ordering is a separate future decision. The compositor must not copy message HTML or recreate platform rendering.
 
-The first milestone proved bounded native composition in OBS: attach to both native chat contexts, detect and measure one message from each, and position them with a transparent gap in a single view. The pure compositor now defines the layout policy for the adapters. Continued native message survival, native clipping, layout interference, and target lifecycle handling remain adapter/coordinator work.
+The first milestone proved bounded native composition in OBS: attach to both native chat contexts, detect and measure one message from each, and position them with a transparent gap in a single view. The pure compositor now defines the layout policy for the adapters. The continuous adapters and coordinator now implement message lifecycle, clipping, native-layout interference and target recovery for the documented bounded scope.
 
 For continuous composition, run `npm start -- .runtime/coordinator.json` using the [coordinator setup and lifecycle contract](docs/coordinator.md). `/native?twitch=CHANNEL&youtube=VIDEO_ID` loads the native surface; loading it alone does not install the adapters.
 
@@ -54,6 +56,6 @@ Read [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and [deve
 
 ## Scope
 
-Windows and OBS are the initial operator target; keep the development tooling portable. Elmychat is a separate project from Elmybot and requires no bot integration to begin. Distribution, installer, OAuth, additional platforms, and a settings UI will be decided after the native-composition proof.
+Windows and OBS are the initial operator target; keep the development tooling portable. Elmychat is a separate project from Elmybot and requires no bot integration to begin. The local settings UI is implemented. This milestone retains the Node/source-checkout workflow; installers, packaged releases, OAuth and additional platforms require separately selected future scope.
 
 No redistribution license has been selected yet.
