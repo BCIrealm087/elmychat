@@ -46,7 +46,8 @@ try {
       if (stopping) return;
       await operator.tick();
       const state = operator.state();
-      const status = JSON.stringify({ status: state.status, lastError: state.lastError, sources: state.sources });
+      const sources = state.sources.map(({ id, platform, status, reason, sessionId, waitingForContainer, trackedRoots }) => ({ id, platform, status, reason, sessionId, waitingForContainer, trackedRoots }));
+      const status = JSON.stringify({ status: state.status, lastError: state.lastError, sources });
       if (status !== previous) { console.log(status); previous = status; }
       try { if (!stopping && Date.now() - lastReport >= 2000) { await saveReport(); lastReport = Date.now(); } }
       catch (error) { console.error(`Report could not be saved: ${error.message}`); }

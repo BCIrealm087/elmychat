@@ -9,6 +9,7 @@ import { once } from 'node:events';
 import { OperatorController } from '../../apps/coordinator/src/operator.js';
 import { NativeCoordinator } from '../../apps/coordinator/src/runtime.js';
 import { createCoordinatorServer } from '../../apps/coordinator/src/server.js';
+import { waitForPaint } from './paint.js';
 
 async function host(t, options = {}) {
   const folder = await mkdtemp(join(tmpdir(), 'elmychat-controls-'));
@@ -91,17 +92,7 @@ test('managed OBS overlay applies live controls to native frames and replaces on
     await controls.getByRole('button', { name: 'Save and connect' }).click(); await complete(controls, 'Sources saved');
     async function idle() {
       await overlay.bringToFront();
-      const deadline = Date.now() + 12000;
-      while (true) {
-        try {
-          await Promise.all(overlay.frames().map((frame) => frame.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))));
-          return;
-        } catch (error) {
-          // A managed frame can navigate between enumeration and evaluation. Wait
-          // on the current frames; keep unexpected failures and the deadline fatal.
-          if (!/Execution context was destroyed|Frame was detached|frame has been detached/i.test(error.message) || Date.now() >= deadline) throw error;
-        }
-      }
+      await waitForPaint(overlay);
     }
     async function until(predicate) {
       const deadline = Date.now() + 12000;

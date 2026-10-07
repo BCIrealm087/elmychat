@@ -9,6 +9,7 @@ import { NativeCoordinator } from '../../apps/coordinator/src/runtime.js';
 import { NativePage } from '../../packages/browser-control/native-page.js';
 import { startCoordinatorFixtures } from '../../scripts/proof/fixtures.js';
 import { twitchAdapterExpression } from '../../packages/adapters/twitch/index.js';
+import { waitForPaint } from './paint.js';
 
 for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${sameProcess ? 'shared page contexts' : 'isolated iframe targets'}`, { timeout: 60000 }, async () => {
   const fixtures = await startCoordinatorFixtures();
@@ -30,7 +31,7 @@ for (const sameProcess of [false, true]) test(`end-to-end native coordinator: ${
     const config = { endpoint: `http://127.0.0.1:${port}`, targetUrl: fixtures.targetUrl, sources: fixtures.sources, gap: 12 };
     runtime = new NativeCoordinator(config, { openPage: async (settings, pinnedId) => { const connected = await NativePage.open(settings, pinnedId); pages.push(connected); return connected; } });
     async function idle() {
-      await Promise.all(page.frames().map((frame) => frame.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(done)))))));
+      await waitForPaint(page, 3);
     }
     async function until(predicate) {
       const deadline = Date.now() + 10000;

@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { NativeCoordinator } from '../../apps/coordinator/src/runtime.js';
 import { NativePage } from '../../packages/browser-control/native-page.js';
 import { startCoordinatorFixtures } from '../../scripts/proof/fixtures.js';
+import { waitForPaint } from './paint.js';
 
 test('rolling native load, idle periods, reconnects and source pressure keep ownership bounded', { timeout: 90000 }, async () => {
   const fixtures = await startCoordinatorFixtures();
@@ -26,7 +27,7 @@ test('rolling native load, idle periods, reconnects and source pressure keep own
     });
     const frames = () => fixtures.sources.map((source) => page.frames().find((frame) => frame.url().startsWith(source.urlPrefix)));
     async function idle() {
-      await Promise.all(page.frames().map((frame) => frame.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))));
+      await waitForPaint(page);
     }
     async function until(predicate) {
       const deadline = Date.now() + 12000;
