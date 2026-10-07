@@ -5,6 +5,9 @@ export function nativeProbe(options) {
     const state = globalThis[key];
     if (!state || state.token !== options.token) return { restored: false };
     for (const [element, style] of state.styles) {
+      // Clear the live CSS declaration before removing its attribute, so later
+      // CSSOM reads cannot synchronize a stale empty inline attribute back in.
+      element.style.cssText = '';
       if (style === null) element.removeAttribute('style'); else element.setAttribute('style', style);
     }
     delete globalThis[key];

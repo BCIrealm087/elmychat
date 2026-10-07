@@ -6,7 +6,7 @@
   body[data-source="second"] .message { background: #3264c8; }
   .decoration { height: 500px; background: yellow; }
 </style></head><body data-source="SOURCE">
-  <div class="wrapper"><article class="message"><b>Synthetic SOURCE:</b> <span>A short message with <i>native descendants</i>.</span></article></div>
+  <div class="wrapper"><article class="message" style="letter-spacing: 0.2px;"><b>Synthetic SOURCE:</b> <span>A short message with <i>native descendants</i>.</span></article></div>
   <div class="decoration">Unrelated chrome that must not paint in the proof</div>
   <script>
     globalThis.originalMessage = document.querySelector('.message');
