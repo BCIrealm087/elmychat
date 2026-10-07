@@ -31,9 +31,17 @@ export function validateRuntimeConfig(input) {
 }
 
 function matches(url, prefix) {
-  // Prefixes may restrict chat query parameters; origin equality prevents host
-  // prefix lookalikes. A document navigation receives a new context generation.
-  return new URL(url).origin === new URL(prefix).origin && url.startsWith(prefix);
+  const actual = new URL(url);
+  const expected = new URL(prefix);
+  const pathMatches = actual.pathname === expected.pathname || (expected.pathname.endsWith('/') ? actual.pathname.startsWith(expected.pathname) : actual.pathname.startsWith(`${expected.pathname}/`));
+  return actual.origin === expected.origin && pathMatches && [...expected.searchParams].every(([key, value]) => actual.searchParams.get(key) === value);
+}
+
+export function validateSpacingCommand(command) {
+  if (!command || !['gap', 'spacer-add', 'spacer-update', 'spacer-remove'].includes(command.type)) throw new TypeError('Unknown spacing command.');
+  if (command.type !== 'spacer-remove' && (!Number.isFinite(command.height) || command.height < 0 || command.height > 10000)) throw new RangeError('Spacing must be 0..10000 pixels.');
+  if (['spacer-update', 'spacer-remove'].includes(command.type) && (typeof command.spacerId !== 'string' || !command.spacerId.length || command.spacerId.length > 512)) throw new TypeError('A spacer identity is required.');
+  return { type: command.type, ...(command.type !== 'spacer-remove' ? { height: command.height } : {}), ...(['spacer-update', 'spacer-remove'].includes(command.type) ? { spacerId: command.spacerId } : {}) };
 }
 
 /** One awaited cycle at a time; no queue of ticks or concurrent layout writers. */
@@ -54,6 +62,7 @@ export class NativeCoordinator {
   #cycles = 0;
   #cleanup = [];
   #sourceStates = new Map();
+  #controls = [];
 
   constructor(config, { openPage = NativePage.open, clock = () => performance.now() } = {}) {
     this.config = validateRuntimeConfig(config);
@@ -75,8 +84,45 @@ export class NativeCoordinator {
   step() {
     if (this.#stopping) return Promise.resolve(this.diagnostics());
     if (this.#work) return this.#work;
-    this.#work = this.#cycle().finally(() => { this.#work = undefined; });
+    this.#work = this.#cycle().finally(() => {
+      this.#work = undefined;
+      if (this.#controls.length && !this.#stopping) queueMicrotask(() => { void this.step(); });
+    });
     return this.#work;
+  }
+
+  control(input) {
+    const command = validateSpacingCommand(input);
+    if (this.#stopping) return Promise.reject(new Error('Coordinator is stopped.'));
+    if (this.#controls.length >= 32) return Promise.reject(new Error('Too many pending spacing commands.'));
+    return new Promise((resolve, reject) => {
+      this.#controls.push({ command, resolve, reject });
+      void this.step();
+    });
+  }
+
+  #applyControl(command) {
+    if (command.type === 'gap') {
+      this.compositor.setGap(command.height);
+      this.config.gap = command.height;
+      return { accepted: true, removed: [] };
+    }
+    const spacers = this.compositor.entries().filter((entry) => entry.kind === 'spacer');
+    if (command.type === 'spacer-add') {
+      if (spacers.length >= 32) throw new RangeError('At most 32 retained spacers are supported.');
+      return this.compositor.setSpacer({ spacerId: randomUUID(), height: command.height });
+    }
+    if (!spacers.some((entry) => entry.spacerId === command.spacerId)) throw new Error('Spacer is no longer retained.');
+    return command.type === 'spacer-remove' ? this.compositor.removeSpacer(command.spacerId) : this.compositor.setSpacer({ spacerId: command.spacerId, height: command.height });
+  }
+
+  #collectRetirements(result, retired) {
+    for (const entry of result.removed ?? []) if (entry.reason === 'history-limit' && entry.kind === 'message') {
+      const current = retired.get(entry.sourceId);
+      const group = current?.sessionId === entry.sessionId ? current : { sessionId: entry.sessionId, messageIds: new Set() };
+      group.messageIds.add(entry.messageId);
+      retired.set(entry.sourceId, group);
+    }
   }
 
   async #retire(id, reason, restore = true) {
@@ -112,6 +158,15 @@ export class NativeCoordinator {
 
   async #cycle() {
     this.#cycles += 1;
+    const retired = new Map();
+    const replies = [];
+    for (const control of this.#controls.splice(0)) {
+      try {
+        const result = this.#applyControl(control.command);
+        this.#collectRetirements(result, retired);
+        replies.push({ resolve: control.resolve, result });
+      } catch (error) { control.reject(error); }
+    }
     try {
       if (this.#page?.disconnected) await this.#disconnect('transport-disconnected');
       if (!this.#page) {
@@ -129,7 +184,6 @@ export class NativeCoordinator {
       this.compositor.setViewport({ width: tops[0].width, height: tops[0].height });
       const matched = this.config.sources.map((source) => frames.filter((frame) => !frame.topLevel && matches(frame.url, source.urlPrefix)));
       if (matched[0].some((first) => matched[1].some((second) => first.context === second.context))) throw new Error('Source prefixes overlap on the same frame.');
-      const retired = new Map();
       for (const source of this.config.sources) {
         if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
         const candidates = frames.filter((frame) => !frame.topLevel && matches(frame.url, source.urlPrefix));
@@ -177,10 +231,7 @@ export class NativeCoordinator {
             else if (event.type === 'resized') result = this.compositor.resizeMessage(report);
             else if (event.type === 'removed') result = this.compositor.removeMessage(report);
             else throw new Error('Unknown adapter report type.');
-            for (const entry of result.removed ?? []) if (entry.reason === 'history-limit' && entry.kind === 'message') {
-              const ids = retired.get(entry.sourceId) ?? new Set();
-              ids.add(entry.messageId); retired.set(entry.sourceId, ids);
-            }
+            this.#collectRetirements(result, retired);
           }
           this.#sourceStates.set(source.id, {
             status: batch.diagnostics?.waitingForContainer ? 'waiting' : 'running',
@@ -193,10 +244,10 @@ export class NativeCoordinator {
           this.#sourceStates.set(source.id, { status: 'failed', reason: error.message });
         }
       }
-      for (const [sourceId, ids] of retired) {
+      for (const [sourceId, group] of retired) {
         const record = this.#records.get(sourceId);
-        if (record) {
-          try { await this.#command(record, 'retireMessages', { messageIds: [...ids] }); }
+        if (record?.sessionId === group.sessionId) {
+          try { await this.#command(record, 'retireMessages', { messageIds: [...group.messageIds] }); }
           catch (error) {
             this.#blocked.set(sourceId, { context: record.context, reason: error.message });
             await this.#retire(sourceId, error.message);
@@ -233,12 +284,14 @@ export class NativeCoordinator {
       this.#lastError = error.message;
       await this.#disconnect(error.message);
     }
+    for (const { resolve, result } of replies) resolve(result);
     return this.diagnostics();
   }
 
   stop() {
     if (this.#stopWork) return this.#stopWork;
     this.#stopping = true;
+    for (const command of this.#controls.splice(0)) command.reject(new Error('Coordinator is stopped.'));
     this.#stopWork = (async () => { await this.#work; await this.#disconnect('teardown'); return this.diagnostics(); })();
     return this.#stopWork;
   }

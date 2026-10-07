@@ -2,7 +2,7 @@
 
 Elmychat is an experimental local chat compositor for OBS. The goal is to combine Twitch and YouTube chat in one chronological view while preserving each platform's native rendering, including emotes, badges, replies, and special messages. Arbitrary transparent spacing between messages is part of the design.
 
-**Status:** bounded native composition proved in OBS; the pure compositor and both platform adapters are implemented and CI-verified on Windows/Linux. Adapters observe native roots, report measurements/removal, apply layout/clipping and restore styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The step 5 coordinator now connects both adapters to the compositor; 48 automated tests passed on Windows/Linux. The operator also confirmed combined live scrolling, emotes, transparency, refresh recovery and restoration, completing step 5’s bounded gate. Prolonged stability remains unverified. Twitch special rows are unsupported and YouTube special roots remain synthetic candidates. See [proof evidence](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), [Twitch support](packages/adapters/twitch/README.md), and [YouTube support](packages/adapters/youtube/README.md).
+**Status:** bounded native composition proved in OBS; the pure compositor and both platform adapters are implemented and CI-verified on Windows/Linux. Adapters observe native roots, report measurements/removal, apply layout/clipping and restore styles. The operator's static probe confirmed native messages, transparent spacing and restoration, with inconsistent message persistence. The step 5 coordinator now connects both adapters to the compositor; 48 step 5 automated tests passed on Windows/Linux. Step 6 controls are implemented and awaiting CI verification. The operator also confirmed combined live scrolling, emotes, transparency, refresh recovery and restoration, completing step 5’s bounded gate. Prolonged stability remains unverified. Twitch special rows are unsupported and YouTube special roots remain synthetic candidates. See [proof evidence](docs/feasibility-proof.md), the [compositor contract](packages/compositor/README.md), [Twitch support](packages/adapters/twitch/README.md), and [YouTube support](packages/adapters/youtube/README.md).
 
 ## Development
 
@@ -17,9 +17,9 @@ npm run check
 npm start
 ```
 
-Open <http://127.0.0.1:3210/> for the transparent starter overlay. The small status label is intentional and will be removed when a real chat view replaces it. <http://127.0.0.1:3210/health> returns the coordinator's bootstrap status. Press Ctrl+C to stop the server. The starter runtime needs no platform credentials or OBS debugging flags; Playwright and PNG parsing are development-only dependencies for automated rendering verification.
+Open <http://127.0.0.1:3210/> for the local controls. Enter your Twitch channel and YouTube video, save and connect, then use <http://127.0.0.1:3210/overlay> in OBS. Source changes update that overlay automatically; gap/spacer controls apply live. Launch OBS with browser debugging enabled on the configured port. Settings are saved under `.runtime/operator.json`. See the [operator workflow](docs/operator-controls.md). Press Ctrl+C for graceful cleanup. Playwright and PNG parsing remain development-only dependencies.
 
-The starter overlay contains no platform frames. The separate `/proof?twitch=CHANNEL&youtube=VIDEO_ID` page loads the two native chat embeds for the bounded diagnostic. Read the [proof procedure and limits](docs/feasibility-proof.md) before using it. Loading either page alone does not demonstrate native composition.
+The controls page is separate from the transparent managed overlay. The separate `/proof?twitch=CHANNEL&youtube=VIDEO_ID` page loads the two native chat embeds for the bounded diagnostic. Read the [proof procedure and limits](docs/feasibility-proof.md) before using it. Loading either page alone does not demonstrate native composition.
 
 ## Directory structure
 

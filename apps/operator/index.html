@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elmychat controls</title>
+<style>
+:root{color-scheme:dark;font:16px/1.5 system-ui,sans-serif;background:#11151b;color:#e8edf4}*{box-sizing:border-box}body{margin:0}main{max-width:1040px;margin:auto;padding:32px 24px}header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}h1{margin:0;font-size:30px;letter-spacing:-1px}h2{margin:0 0 14px;font-size:19px}p{margin:8px 0;color:#adb9c8}.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#8fddc3}.grid{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}.card{padding:24px;background:#1a2029;border:1px solid #313a47;border-radius:14px}label{display:block;margin:15px 0 6px;font-weight:600;font-size:14px}input,select,button{font:inherit;border-radius:7px}input,select{width:100%;padding:10px 12px;background:#11151b;color:#e8edf4;border:1px solid #465265}input:focus,select:focus,button:focus-visible{outline:2px solid #8fddc3;outline-offset:2px}button{padding:10px 14px;border:1px solid #596779;background:#2b3543;color:#f4f7fb;cursor:pointer}button.primary{background:#8fddc3;color:#10221c;border-color:#8fddc3;font-weight:700}button:disabled{opacity:.45;cursor:wait}.row{display:flex;align-items:center;gap:10px;margin-top:16px}.row input{min-width:0}.row button{white-space:nowrap}.status{border:1px solid #465265;border-radius:30px;padding:6px 12px;font-size:13px;white-space:nowrap}.status[data-live=true]{color:#8fddc3;border-color:#65aa91}.hint{font-size:13px}details{margin-top:18px}summary{cursor:pointer;color:#adb9c8}.source-status{list-style:none;padding:0;margin:14px 0}.source-status li{padding:8px 0;border-bottom:1px solid #313a47;font-size:14px;overflow-wrap:anywhere}.source-status strong{text-transform:capitalize}.notice{min-height:24px;margin:14px 0;overflow-wrap:anywhere}.notice.error{color:#ffb6b6}.spacer{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:8px;padding-top:12px}.spacer input{min-width:60px}.spacer button{padding:8px}.url-card{margin-top:20px}.url-card input{font:13px/1.5 ui-monospace,monospace}.small{font-size:13px}a{color:#8fddc3}@media(max-width:760px){.grid{grid-template-columns:1fr}main{padding:20px 16px}header{align-items:flex-start}.card{padding:20px}.spacer{grid-template-columns:1fr 1fr}.row{flex-wrap:wrap}.row input{flex:1}}
+</style>
+<script src="/assets/control.js" defer></script>
+</head>
+<body><main>
+<header><div><div class="eyebrow">Native chat · OBS</div><h1>Elmychat</h1><p>One stream, with room to breathe.</p></div><span id="status" class="status" role="status">Loading</span></header>
+<div id="notice" class="notice" role="alert" aria-live="polite"></div>
+<div class="grid">
+<section class="card"><h2>Chat sources</h2><p class="hint">Choose the chats for your OBS source.</p>
+<form id="sources-form">
+<label for="channel">Twitch channel</label><input id="channel" name="channel" placeholder="channel_name" autocomplete="off" required maxlength="25" pattern="[a-zA-Z0-9_]{1,25}">
+<label for="video">YouTube video ID or URL</label><input id="video" name="videoId" placeholder="Video ID or https://www.youtube.com/watch?v=…" autocomplete="off" required maxlength="1024">
+<details><summary>OBS connection settings</summary><label for="port">OBS debugging port</label><input id="port" type="number" min="1" max="65535" value="9222" required>
+<p class="hint">Launch OBS with browser debugging enabled on this port.</p><label for="target">Browser Source selection</label><select id="target"><option value="">Match the overlay URL automatically</option></select><div class="row"><button type="button" id="find-targets">Find matching sources</button></div><p id="target-help" class="hint">Choose a specific source if several OBS sources use the same URL.</p></details>
+<div class="row"><button class="primary" type="submit">Save and connect</button></div>
+</form>
+<ul id="source-status" class="source-status"></ul>
+<div class="row"><button id="connect" type="button">Connect</button><button id="disconnect" type="button">Disconnect and restore</button></div>
+</section>
+<section class="card"><h2>Spacing</h2><form id="gap-form"><label for="gap">Default gap between messages (px)</label><div class="row"><input id="gap" type="number" min="0" max="10000" step="any" value="12" required><button type="submit">Apply gap</button></div></form>
+<p class="hint">Applies live and is saved with your source settings.</p>
+<form id="spacer-form"><label for="spacer-height">Insert a transparent spacer (px)</label><div class="row"><input id="spacer-height" type="number" min="0" max="10000" step="any" value="120" required><button type="submit">Insert spacer</button></div></form>
+<p class="hint">Inserted after the current messages; new arrivals follow it. Spacers replace the normal gap at that point and last for this run.</p>
+<div id="spacers"></div><p id="empty-spacers" class="hint">No spacers in the current history.</p>
+</section>
+</div>
+<section class="card url-card"><h2>OBS Browser Source URL</h2><div class="row"><input id="overlay-url" readonly aria-label="OBS Browser Source URL"><button id="copy-url" type="button">Copy URL</button></div><p class="hint">Paste this URL into an OBS Browser Source. Keep the same URL when changing chats; the overlay loads the new sources automatically.</p><p class="small">Connection detail: <span id="connection-detail">Not connected</span> · <a href="/health" target="_blank" rel="noopener">Diagnostics</a></p></section>
+</main></body></html>

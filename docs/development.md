@@ -7,7 +7,7 @@ Use `BCIrealm087/elmychat` on `codex-startup`. Node.js 22+ and its bundled npm a
 | Command | Behavior |
 | --- | --- |
 | `npm ci` | Install the committed dependency lockfile |
-| `npm start` | Serve the overlay on `127.0.0.1:3210`; supply `-- CONFIG` to run native coordination |
+| `npm start` | Serve controls and the managed overlay on `127.0.0.1:3210`; restore saved operator settings, or supply `-- CONFIG` for explicit native coordination |
 | `npm run dev` | Run the coordinator with Node's watch mode |
 | `npm test` | Run Node's built-in behavioral tests |
 | `npm run test:browser` | Run synthetic Chromium composition checks (install browser first) |
@@ -39,3 +39,5 @@ Persisted runtime data belongs in `.runtime/`; browser profiles belong in `brows
 Use focused commits and update status documentation with substantive behavior changes. Do not add a framework, installer, distribution license, bot coupling, or published package until the project needs it. The user handles live testing and deployment unless they request assistance.
 
 The coordinator browser suite runs the complete real-CDP pipeline in both OOPIF and shared-context modes. See [coordinator contracts and limits](coordinator.md); it adds `.runtime/proof/coordinator*.json/png` to CI artifacts.
+
+Step 6 adds source configuration and live spacing controls. See [operator workflow and persistence/API contracts](operator-controls.md). The control/UI and managed-overlay browser suites add responsive page artifacts and verify the actual controls-to-CDP pipeline with intercepted synthetic native fixtures. No repeat human gate is required.

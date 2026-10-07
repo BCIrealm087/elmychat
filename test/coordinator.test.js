@@ -211,3 +211,60 @@ test('loading documents wait and recover in the same context without latching or
   assert.equal(runtime.compositor.sourceCount, 2);
   await runtime.stop();
 });
+
+test('live gap and spacers preserve message sequences, survive reconnect, and retire spacer-driven evictions', async () => {
+  const { page, runtime } = await attached({ maxEntries: 3 });
+  page.publish(1, 'added', 'a'); page.publish(2, 'added', 'b'); await runtime.step();
+  const sequences = runtime.compositor.entries().map((entry) => entry.sequence);
+  await runtime.control({ type: 'gap', height: 50.5 });
+  let layout = runtime.compositor.layout();
+  assert.equal(layout.placements[1].rect.y - layout.placements[0].rect.y - 28, 50.5);
+  assert.deepEqual(runtime.compositor.entries().map((entry) => entry.sequence), sequences);
+  const spacer = (await runtime.control({ type: 'spacer-add', height: 100 })).entry;
+  assert.equal(runtime.compositor.layout().placements.at(-1).rect.y + 28, 500);
+  await runtime.control({ type: 'spacer-update', spacerId: spacer.spacerId, height: 200 });
+  assert.equal(runtime.compositor.layout().placements.at(-1).rect.y + 28, 400);
+  const second = (await runtime.control({ type: 'spacer-add', height: 20 })).entry;
+  assert.deepEqual(page.calls.filter((c) => c.method === 'retireMessages').at(-1).command.messageIds, ['a']);
+  page.publish(1, 'added', 'c'); await runtime.step();
+  layout = runtime.compositor.layout();
+  assert.equal(layout.spacers.length, 2);
+  await runtime.control({ type: 'spacer-remove', spacerId: second.spacerId });
+  await assert.rejects(runtime.control({ type: 'spacer-update', spacerId: second.spacerId, height: 1 }), /no longer retained/);
+  page.frames[1] = { ...page.frames[1], context: {} }; await runtime.step();
+  assert.equal(runtime.compositor.layout().spacers[0].spacerId, spacer.spacerId);
+  await runtime.stop();
+});
+
+test('controls queued during a cycle are drained without another timer and pending work rejects on stop', async () => {
+  const { page, runtime } = await attached();
+  const describe = page.describe.bind(page);
+  let release; const gate = new Promise((done) => { release = done; });
+  page.describe = async () => { await gate; return describe(); };
+  const cycle = runtime.step();
+  const control = runtime.control({ type: 'gap', height: 75 });
+  release(); await cycle; await control;
+  assert.equal(runtime.config.gap, 75);
+  assert.throws(() => runtime.control({ type: 'gap', height: NaN }), /Spacing/);
+  await runtime.stop();
+  await assert.rejects(runtime.control({ type: 'gap', height: 0 }), /stopped/);
+});
+
+test('spacer and command limits are explicit and do not mutate accepted spacing', async () => {
+  const { runtime } = await attached();
+  for (let i = 0; i < 32; i += 1) await runtime.control({ type: 'spacer-add', height: i });
+  await assert.rejects(runtime.control({ type: 'spacer-add', height: 1 }), /32 retained spacers/);
+  assert.equal(runtime.compositor.layout().spacers.length, 32);
+  await runtime.stop();
+});
+
+test('source query selection ignores parameter order but rejects a different video', async () => {
+  const page = new Page();
+  page.frames[2].url = 'https://youtube.test/chat?embed_domain=localhost&v=abcdefghijk';
+  const selected = { ...config, sources: [config.sources[0], { ...config.sources[1], urlPrefix: 'https://youtube.test/chat?v=abcdefghijk' }] };
+  const runtime = new NativeCoordinator(selected, { openPage: async () => page });
+  await runtime.step(); assert.equal(runtime.diagnostics().sources[1].status, 'running');
+  page.frames[2] = { ...page.frames[2], context: {}, url: 'https://youtube.test/chat?v=other-video' };
+  await runtime.step(); assert.equal(runtime.diagnostics().sources[1].status, 'waiting');
+  await runtime.stop();
+});

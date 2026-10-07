@@ -4,6 +4,8 @@ Step 5 connects the two native adapters to the compositor through the selected O
 
 ## Run
 
+For the managed source configuration and controls workflow, use plain `npm start` and [operator controls](operator-controls.md). The explicit JSON procedure below remains supported.
+
 Keep the OBS debugging setup that worked for the static proof. Do not run the static probe and coordinator concurrently. Stop the existing `npm start` server before starting this configured instance.
 
 Copy `docs/coordinator.example.json` to `.runtime/coordinator.json`. Replace the channel/video placeholders in `targetUrl` with the real values; retain the URL's exact query order. If identical Browser Sources exist, use `targetId` from `npm run proof:targets` instead. The coordinator pins that ID after its first connection and will not attach to a replacement target ID automatically.
@@ -21,7 +23,7 @@ Use the matching `http://127.0.0.1:3210/native?twitch=CHANNEL&youtube=VIDEO_ID` 
 
 Each serialized cycle discovers default worlds, reads the selected top-level viewport, drains Twitch then YouTube in configured order, admits reports and routes full per-source layout snapshots. Default interval is 100ms **after** a completed cycle; slow CDP work cannot accumulate ticks. Native observers still coalesce reports between drains. Initial native roots are admitted in each adapter's discovery order. Cross-source events drained in the same cycle follow configured source order, not an estimate of platform send time. The monotonic compositor sequence persists across source reconnection.
 
-Dimensions/removals carry source and session identity; obsolete generations are dropped. A width change requests native remeasurement and keeps stale measurements hidden. Height changes relayout without resequencing. History evictions explicitly retire connected native roots so they cannot be re-admitted on the next drain. Layouts are sent only when a source's snapshot changes, with increasing revisions. Gap configuration uses the existing compositor; interactive and arbitrary spacer controls remain step 6.
+Dimensions/removals carry source and session identity; obsolete generations are dropped. A width change requests native remeasurement and keeps stale measurements hidden. Height changes relayout without resequencing. History evictions explicitly retire connected native roots so they cannot be re-admitted on the next drain. Layouts are sent only when a source's snapshot changes, with increasing revisions. Gap configuration uses the existing compositor; the [step 6 controls](operator-controls.md) now provide live gap changes and insert/resize/remove current-run spacers.
 
 Frame navigation/replacement/unload retires the source generation; a unique matching replacement gets a fresh session. Missing or ambiguous frames wait without choosing one. Adapter failure restores/retire its source and is latched for that document; refreshing that source permits a new attempt. Other healthy sources continue. A matching source document without a body waits as `native-document-loading` and retries each cycle without latching a failure. Installation rechecks readiness atomically; unavailable ResizeObserver has a separate explicit failure. A missing YouTube scrolling container is reported as waiting while observation remains active.
 

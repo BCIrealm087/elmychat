@@ -1,0 +1,125 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { once } from 'node:events';
+import { request as httpRequest } from 'node:http';
+import { OperatorController, normalizeOperatorConfig, operatorRuntimeConfig, sourceUrls } from '../apps/coordinator/src/operator.js';
+import { NativeCoordinator } from '../apps/coordinator/src/runtime.js';
+import { createCoordinatorServer } from '../apps/coordinator/src/server.js';
+
+const settings = { channel: 'Example_Channel', videoId: 'https://www.youtube.com/watch?v=abcdefghijk&t=10', debugPort: 9222, gap: 12 };
+const factory = (config) => new NativeCoordinator(config, { openPage: async () => { throw new Error('Synthetic OBS endpoint offline.'); } });
+async function controller(t, options = {}) {
+  const folder = await mkdtemp(join(tmpdir(), 'elmychat-operator-'));
+  const statePath = join(folder, 'operator.json');
+  const operator = new OperatorController({ statePath, createRuntime: factory, ...options });
+  t.after(async () => { await operator.close(); await rm(folder, { recursive: true, force: true }); });
+  return { operator, statePath };
+}
+
+test('operator settings normalize video links and constrain source identity and connection limits', () => {
+  const config = normalizeOperatorConfig(settings);
+  assert.equal(config.channel, 'example_channel'); assert.equal(config.videoId, 'abcdefghijk');
+  for (const videoId of ['abcdefghijk', 'https://youtu.be/abcdefghijk', 'https://youtube.com/live/abcdefghijk']) assert.equal(normalizeOperatorConfig({ ...settings, videoId }).videoId, 'abcdefghijk');
+  for (const change of [{ channel: '<script>' }, { channel: 'has space' }, { videoId: 'https://youtube.com.evil/watch?v=abcdefghijk' }, { videoId: 'https://user@youtube.com/watch?v=abcdefghijk' }, { videoId: 'http://youtu.be/abcdefghijk' }, { videoId: 'https://youtube.com/playlist?list=abcdefghijk' }, { gap: -1 }, { debugPort: 0 }, { debugPort: 9222.5 }, { targetId: false }]) assert.throws(() => normalizeOperatorConfig({ ...settings, ...change }));
+  const runtime = operatorRuntimeConfig(config, 'http://127.0.0.1:3210/overlay');
+  assert.equal(runtime.sources[1].urlPrefix, 'https://www.youtube.com/live_chat?v=abcdefghijk');
+  assert.match(sourceUrls(config)[0].url, /embed\/example_channel\/chat\?parent=127.0.0.1$/);
+});
+
+test('saved sources, gap and enabled state reload, while inserted spacers belong to the current run', async (t) => {
+  const { operator, statePath } = await controller(t);
+  await operator.load(); assert.equal(operator.state().configured, false);
+  await operator.configure(settings);
+  await operator.spacing({ type: 'gap', height: 64.5 });
+  await operator.spacing({ type: 'spacer-add', height: 120 });
+  const saved = JSON.parse(await readFile(statePath, 'utf8'));
+  assert.equal(saved.enabled, true); assert.equal(saved.config.gap, 64.5);
+  assert.equal(saved.spacers, undefined);
+  await operator.close();
+  const reloaded = new OperatorController({ statePath, createRuntime: factory });
+  t.after(() => reloaded.close()); await reloaded.load();
+  assert.equal(reloaded.state().enabled, true); assert.equal(reloaded.state().gap, 64.5); assert.equal(reloaded.state().spacers.length, 0);
+  await reloaded.disconnect();
+  const disabled = new OperatorController({ statePath, createRuntime: factory });
+  t.after(() => disabled.close()); await disabled.load();
+  assert.equal(disabled.state().enabled, false);
+  await disabled.connect(); assert.equal(disabled.state().enabled, true);
+});
+
+test('persistence failures preserve a working config and roll back a live gap change', async (t) => {
+  let fail = false;
+  const { operator } = await controller(t, { save: async () => { if (fail) throw new Error('Disk is full.'); } });
+  await operator.configure(settings); fail = true;
+  await assert.rejects(operator.configure({ ...settings, channel: 'other' }), /Disk is full/);
+  assert.equal(operator.state().config.channel, 'example_channel');
+  await assert.rejects(operator.spacing({ type: 'gap', height: 99 }), /Disk is full/);
+  assert.equal(operator.state().gap, 12);
+});
+
+test('source replacement restores the previous runtime and matching-target discovery excludes unrelated pages', async (t) => {
+  const runtimes = [];
+  const overlayUrl = 'http://127.0.0.1:3210/overlay';
+  const { operator } = await controller(t, {
+    createRuntime: (config) => { const runtime = factory(config); runtimes.push(runtime); return runtime; },
+    discoverTargets: async () => ({ targets: [
+      { id: 'one', url: overlayUrl, title: 'Overlay one' }, { id: 'two', url: overlayUrl, title: 'Overlay two' },
+      { id: 'unrelated', url: 'https://youtube.com/', title: 'Unrelated page' },
+    ] }),
+  });
+  await operator.configure(settings); await operator.configure({ ...settings, channel: 'other', targetId: 'two' });
+  assert.equal(runtimes[0].diagnostics().status, 'stopped');
+  assert.equal(runtimes[1].config.targetId, 'two'); assert.equal(runtimes[1].config.targetUrl, overlayUrl);
+  assert.deepEqual((await operator.targets()).map((target) => target.id), ['one', 'two']);
+  assert.match(operator.overlay().sources[0].url, /embed\/other\/chat/);
+});
+
+test('corrupt persisted settings fail explicitly and remain untouched', async (t) => {
+  const { operator, statePath } = await controller(t);
+  await writeFile(statePath, '{corrupt');
+  await assert.rejects(operator.load(), /could not be read/);
+  assert.equal(await readFile(statePath, 'utf8'), '{corrupt');
+});
+
+test('operator actions are serialized, bounded, and cannot be added during shutdown', async (t) => {
+  let release; const gate = new Promise((done) => { release = done; });
+  const { operator } = await controller(t, { save: async () => gate });
+  const pending = Array.from({ length: 8 }, () => operator.configure(settings));
+  await assert.rejects(operator.connect(), /Too many pending/);
+  const closed = operator.close();
+  await assert.rejects(operator.connect(), /shutting down/);
+  release(); await Promise.all(pending); await closed;
+  assert.equal(operator.health().status, 'stopped');
+});
+
+test('local HTTP controls validate writes, origin, nonce, Host, body bounds and JSON without changing accepted settings', async (t) => {
+  const { operator } = await controller(t);
+  const server = createCoordinatorServer({ operator, health: () => operator.health() });
+  t.after(() => new Promise((done) => server.close(done)));
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`; operator.overlayUrl = `${base}/overlay`;
+  const state = await (await fetch(`${base}/api/state`)).json();
+  const headers = { Origin: base, 'Content-Type': 'application/json', 'X-Elmychat-Token': state.token };
+  const post = (path, body, overrides = {}) => fetch(`${base}${path}`, { method: 'POST', headers: { ...headers, ...overrides }, body });
+  assert.equal((await post('/api/config', JSON.stringify(settings), { Origin: 'https://other.example' })).status, 403);
+  assert.equal((await post('/api/config', JSON.stringify(settings), { 'X-Elmychat-Token': 'wrong' })).status, 403);
+  assert.equal((await post('/api/config', JSON.stringify(settings), { 'Content-Type': 'text/plain' })).status, 415);
+  assert.equal((await post('/api/config', '{broken')).status, 400);
+  assert.equal((await post('/api/config', JSON.stringify({ ...settings, videoId: 'bad' }))).status, 400);
+  assert.equal((await post('/api/config', JSON.stringify({ ...settings, extra: 'x'.repeat(16384) }))).status, 413);
+  assert.equal(operator.state().configured, false);
+  const response = await post('/api/config', JSON.stringify(settings)); assert.equal(response.status, 200);
+  assert.equal((await response.json()).config.videoId, 'abcdefghijk');
+  assert.equal((await post('/api/spacing', JSON.stringify({ type: 'gap', height: 32 }))).status, 200);
+  assert.equal(operator.state().gap, 32);
+  assert.equal((await post('/api/spacing', JSON.stringify({ type: 'gap', height: -1 }))).status, 400);
+  assert.equal(operator.state().gap, 32);
+  const foreignStatus = await new Promise((resolve, reject) => { const request = httpRequest(`${base}/api/state`, { headers: { Host: 'malicious.example' } }, (response) => { response.resume(); response.on('end', () => resolve(response.statusCode)); }); request.on('error', reject); request.end(); }); assert.equal(foreignStatus, 403);
+  const options = await fetch(`${base}/api/config`, { method: 'OPTIONS', headers: { Origin: 'https://other.example' } });
+  assert.equal(options.status, 405); assert.equal(options.headers.get('access-control-allow-origin'), null);
+  const page = await fetch(base); assert.equal(page.headers.get('x-frame-options'), 'DENY'); assert.match(await page.text(), /Save and connect/);
+  assert.equal((await post('/api/disconnect', '{}')).status, 200);
+  assert.equal((await post('/api/spacing', JSON.stringify({ type: 'spacer-add', height: 1 }))).status, 409);
+});
