@@ -2,6 +2,41 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fetchBootstrap } from '../../../packages/adapters/twitch/ffz-bootstrap.js';
 import { enhancementExpression, validateEmoteOptions } from '../../../packages/adapters/twitch/enhancement.js';
 
+function boundedSnapshot(input) {
+  const string = (value, limit) => value == null ? null : typeof value === 'string' ? value.slice(0,limit) : invalid();
+  const invalid = () => { throw new Error('Unsupported enhancement diagnostics.'); };
+  const count = (value, limit) => Number.isInteger(value) && value >= 0 && value <= limit ? value : invalid();
+  if (typeof input.resetRequired !== 'boolean') invalid();
+  const result = { status: input.status, reason: string(input.reason,240), resetRequired: input.resetRequired,
+    engineVersion: string(input.engineVersion,128), providers: input.providers.map(provider => {
+      if (!['7tv-emotes', 'ffzap-bttv'].includes(provider.id) || typeof provider.moduleReady !== 'boolean') invalid();
+      return { id: provider.id, moduleReady: provider.moduleReady, version: string(provider.version,80),
+        setCount: count(provider.setCount,2048), emoteCount: count(provider.emoteCount,20000),
+        countsTruncated: provider.countsTruncated === true,
+        dataStatus: ['available', 'empty-or-pending'].includes(provider.dataStatus) ? provider.dataStatus : invalid() };
+    }) };
+  if (input.awaitingNative) result.awaitingNative = true;
+  if (input.compatibilityVersion !== undefined) result.compatibilityVersion = count(input.compatibilityVersion,2);
+  if (input.isolation) {
+    const info = input.isolation;
+    if (!['pending', 'isolated', 'released'].includes(info.status) || !Array.isArray(info.settings) || info.settings.length > 16) invalid();
+    result.isolation = { status: info.status, registrationRetained: info.registrationRetained === true,
+      entries: count(info.entries,256), maxEntries: 256, maxBytes: 65536, maxValueBytes: 4096,
+      settings: info.settings.map(record => {
+        if (typeof record.key !== 'string' || record.key.length > 128) invalid();
+        const scalar = value => value == null || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) ? value ?? null : string(value,80);
+        let applied = record.applied;
+        if (applied && typeof applied === 'object') {
+          const entries = Object.entries(applied);
+          if (entries.length > 8 || entries.some(([key,value]) => key.length > 80 || typeof value !== 'boolean')) invalid();
+          applied = Object.fromEntries(entries);
+        } else applied = scalar(applied);
+        return { key: record.key, priorDefault: scalar(record.priorDefault), applied };
+      }) };
+  }
+  return result;
+}
+
 /** One asynchronous worker, one document binding, and no work in native cycles. */
 export class TwitchEnhancement {
   #owner;
@@ -34,7 +69,7 @@ export class TwitchEnhancement {
   }
 
   diagnostics() {
-    return { ...this.#state, providers: this.#state.providers.map(provider => ({ ...provider })),
+    return { ...structuredClone(this.#state),
       attempts: this.#attempts, resetAttempted: this.#resetUsed, resetOutcome: this.#resetOutcome,
       resetRequested: this.#resetOutcome === 'requested', activeWork: !!this.#job };
   }
@@ -93,7 +128,7 @@ export class TwitchEnhancement {
         result.status !== 'loading' || result.resetRequired !== false || result.providers.length)) {
       throw new Error('Unsupported native preparation response.');
     }
-    return result;
+    return ['begin', 'poll', 'stop'].includes(operation) ? boundedSnapshot(result) : result;
   }
 
   async #release(binding) {
@@ -165,7 +200,7 @@ export class TwitchEnhancement {
     } catch (error) {
       if (!live()) return;
       this.#terminal = binding;
-      this.#state = { ...this.#state, status: 'unavailable', reason: String(error.message).slice(0,240) };
+      this.#state = { ...this.#state, status: 'unavailable', reason: String(error?.message ?? error).slice(0,240) };
       if (binding.begun) {
         try {
           const stopped = await this.#call(binding, 'stop');

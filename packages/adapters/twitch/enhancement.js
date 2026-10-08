@@ -1,4 +1,5 @@
 import { ffzBootstrapUrl } from './ffz-bootstrap.js';
+import { prepareFfzSettings } from './settings-isolation.js';
 
 export const enhancementKey = '__elmychatTwitchEnhancementV1';
 
@@ -13,11 +14,11 @@ export function validateEmoteOptions(input) {
 }
 
 export function enhancementExpression(command) {
-  return `(${nativeEnhancement.toString()})(${JSON.stringify(command)}, ${JSON.stringify(enhancementKey)}, ${JSON.stringify(ffzBootstrapUrl)})`;
+  return `(${nativeEnhancement.toString()})(${JSON.stringify(command)}, ${JSON.stringify(enhancementKey)}, ${JSON.stringify(ffzBootstrapUrl)}, ${prepareFfzSettings.toString()})`;
 }
 
 // Runs only in the selected Twitch document. Never parses or positions messages.
-function nativeEnhancement(command, key, url) {
+function nativeEnhancement(command, key, url, prepareSettings) {
   const previous = globalThis[key];
   const owned = previous?.owner === command.owner;
   if (command.operation === 'inspect') return previous ? { owned, status: previous.status, resetRequired: owned && previous.resetRequired } : null;
@@ -48,7 +49,7 @@ function nativeEnhancement(command, key, url) {
   const requested = [...(command.emotes.sevenTv ? ['7tv-emotes'] : []), ...(command.emotes.betterTtv ? ['ffzap-bttv'] : [])];
   if (!requested.length) throw new Error('No emote providers requested.');
   if (previous) {
-    if (!owned || previous.documentUrl !== command.documentUrl || JSON.stringify(previous.requested) !== JSON.stringify(requested)) {
+    if (!owned || previous.compatibilityVersion !== 2 || previous.documentUrl !== command.documentUrl || JSON.stringify(previous.requested) !== JSON.stringify(requested)) {
       throw new Error('Existing enhancement belongs to another owner or provider choice.');
     }
     // Reconnect can adopt this process's existing hooks, never inject twice.
@@ -61,17 +62,20 @@ function nativeEnhancement(command, key, url) {
         return host === domain || host.endsWith(`.${domain}`);
       }))) throw new Error('Existing chat enhancement detected; refresh Twitch before enabling emotes.');
   if (!/^sha256-[A-Za-z0-9+/]{43}=$/.test(command.integrity)) throw new Error('A verified FFZ bootstrap is required.');
-  const state = { owner: command.owner, binding: command.sessionId, documentUrl: command.documentUrl,
+  const loader = document.createElement('script');
+  const isolation = prepareSettings(command.emotes);
+  const state = { owner: command.owner, binding: command.sessionId, documentUrl: command.documentUrl, compatibilityVersion: 2,
     requested, status: 'loading', reason: null, resetRequired: false, providers: [], engineVersion: null };
   const ids = requested.includes('ffzap-bttv') ? ['ffzap-core', ...requested] : requested;
   let active = true;
   let configured = false;
   let savedBefore;
-  const loader = document.createElement('script');
-  const release = () => { clearTimeout(expiry); loader.onload = loader.onerror = null; loader.remove(); };
+  let ownedEngine;
+  const release = () => { clearTimeout(expiry); loader.onload = loader.onerror = null; loader.remove(); isolation.release(state.resetRequired); };
   const fail = reason => { state.status = 'unavailable'; state.reason = reason; active = false; release(); };
   const snapshot = () => ({ status: state.status, reason: state.reason, resetRequired: state.resetRequired,
-    engineVersion: state.engineVersion, providers: state.providers.map(provider => ({ ...provider })) });
+    compatibilityVersion: 2, isolation: isolation.snapshot(), engineVersion: state.engineVersion,
+    providers: state.providers.map(provider => ({ ...provider })) });
   state.stop = () => {
     active = false; release(); state.status = 'unavailable'; state.reason = 'Enhancement stopped; Twitch refresh required.';
     return snapshot();
@@ -84,6 +88,9 @@ function nativeEnhancement(command, key, url) {
       if (current?.status !== 'running' || current.sessionId !== state.binding) throw new Error('Native Twitch generation is unavailable.');
       const engine = globalThis.FrankerFaceZ?.get?.();
       if (!engine) return snapshot();
+      if (ownedEngine && engine !== ownedEngine || globalThis.BetterTTV || globalThis.SevenTV ||
+          globalThis.__elmychatEmoteProofV1 || globalThis.ffz && globalThis.ffz !== engine) throw new Error('Competing chat enhancement detected.');
+      ownedEngine = engine;
       if (typeof engine.resolve !== 'function') throw new Error('Unsupported FFZ engine API.');
       const manager = engine.resolve('addons');
       if (!manager?.enabled) return snapshot();
@@ -91,7 +98,9 @@ function nativeEnhancement(command, key, url) {
         if (typeof manager[method] !== 'function') throw new Error(`Unsupported FFZ add-on API: ${method}.`);
       }
       if (!ids.every(id => manager.hasAddon(id))) return snapshot();
-      const provider = engine.resolve('settings')?.provider;
+      const settings = engine.resolve('settings');
+      isolation.verify(settings);
+      const provider = settings.provider;
       if (typeof provider?.get !== 'function' || !Array.isArray(manager.enabled_addons)) throw new Error('Unsupported FFZ settings API.');
       if (!configured) {
         const saved = provider.get('addons.enabled', []);
@@ -109,21 +118,37 @@ function nativeEnhancement(command, key, url) {
         for (const id of ids) manager.enableAddon(id, false);
       }
       if (JSON.stringify(provider.get('addons.enabled', [])) !== savedBefore) throw new Error('Saved FFZ add-on preferences changed.');
+      if (manager.enabled_addons.length > ids.length || new Set(manager.enabled_addons).size !== manager.enabled_addons.length ||
+          manager.enabled_addons.some(id => !ids.includes(id))) throw new Error('Unexpected FFZ add-on enabled in this session.');
       const emotes = engine.resolve('chat.emotes');
       if (!emotes || !emotes.emote_sets || typeof emotes.emote_sets !== 'object') throw new Error('Unsupported FFZ emote data API.');
+      const counts = new Map(requested.map(id => [id, { setCount: 0, emoteCount: 0, countsTruncated: false }]));
+      let inspectedSets = 0, inspectedEmotes = 0;
+      for (const setId in emotes.emote_sets) {
+        if (++inspectedSets > 2048) { for (const count of counts.values()) count.countsTruncated = true; break; }
+        if (!Object.hasOwn(emotes.emote_sets, setId)) continue;
+        const set = emotes.emote_sets[setId], count = counts.get(set?.__source);
+        if (!count) continue;
+        count.setCount += 1;
+        for (const name in set.emotes ?? {}) {
+          if (++inspectedEmotes > 20000) { count.countsTruncated = true; break; }
+          if (Object.hasOwn(set.emotes, name)) count.emoteCount += 1;
+        }
+        if (inspectedEmotes > 20000) { for (const count of counts.values()) count.countsTruncated = true; break; }
+      }
       state.providers = requested.map(id => {
-        const sets = Object.values(emotes.emote_sets).filter(set => set?.__source === id);
-        const emoteCount = sets.reduce((count, set) => count + Object.keys(set.emotes ?? {}).length, 0);
+        const count = counts.get(id);
         return { id, moduleReady: engine.resolve(`addon.${id}`)?.enabled === true && manager.isAddonEnabled(id),
           version: typeof manager.getVersion === 'function' ? String(manager.getVersion(id)).slice(0,80) : null,
-          setCount: sets.length, emoteCount, dataStatus: sets.length ? 'available' : 'empty-or-pending' };
+          ...count, dataStatus: count.setCount ? 'available' : 'empty-or-pending' };
       });
       const version = globalThis.FrankerFaceZ.version_info;
       if (version) state.engineVersion = ['major', 'minor', 'revision'].map(name => String(version[name] ?? '').slice(0,40)).join('.');
       if (state.providers.every(provider => provider.moduleReady)) {
+        isolation.verify(settings, true);
         state.status = 'ready'; clearTimeout(expiry);
       } else state.status = 'loading';
-    } catch (error) { fail(String(error.message).slice(0,240)); }
+    } catch (error) { fail(String(error?.message ?? error).slice(0,240)); }
     return snapshot();
   };
   const expiry = setTimeout(() => fail('Emote enhancement readiness timed out.'), 75000);

@@ -19,6 +19,71 @@ const source = await readFile(new URL('../fixtures/twitch/source.html', import.m
 const hash = body => `sha256-${createHash('sha256').update(body).digest('base64')}`;
 const bootstrap = { integrity: hash(shim) };
 
+test('isolated FFZ appearance preserves native badges/type and bounds counts without touching shared preferences', { timeout: 30000 }, async () => {
+  const browser = await chromium.launch({ channel: 'chromium', headless: true });
+  try {
+    const page = await browser.newPage(); await page.setContent(source);
+    await page.evaluate(() => {
+      globalThis.fixtureStoredSettings = { 'addons.enabled': ['unrelated'], 'profiles': [{ id:0, name:'Personal' }], 'p:0:chat.font-size':42 };
+      globalThis.sharedBefore = JSON.stringify(fixtureStoredSettings);
+      globalThis.nativeBadge = document.createElement('span'); nativeBadge.textContent='Native badge'; nativeBadge.dataset.nativeBadge='true';
+      nativeRoots[0].prepend(nativeBadge);
+    });
+    await page.route(ffzBootstrapUrl, route => route.fulfill({ contentType:'text/javascript', headers:{'access-control-allow-origin':'*'}, body:shim }));
+    await page.evaluate(twitchAdapterExpression({ sourceId:'twitch', sessionId:'owner:isolated', width:420 }));
+    const appearance = () => page.evaluate(() => [nativeRoots[0], document.querySelector('.scroll')].map(node => {
+      const css=getComputedStyle(node);return [css.fontFamily,css.fontSize,css.lineHeight,css.marginTop,css.paddingLeft,css.backgroundColor];
+    }));
+    const before = await appearance();
+    const call = operation => page.evaluate(enhancementExpression({ operation, owner:'owner', sessionId:'owner:isolated', documentUrl:page.url(), emotes:{sevenTv:true,betterTtv:true}, integrity:bootstrap.integrity }));
+    await call('begin'); await page.waitForFunction(() => !!globalThis.fixtureFfz);
+    const ready = await call('poll'); assert.equal(ready.status,'ready'); assert.equal(ready.isolation.status,'isolated');
+    assert.equal(ready.isolation.settings.length,13); assert.equal(ready.isolation.registrationRetained,false);
+    await page.locator('img[data-provider="ffz"]').first().waitFor({ state:'attached' });
+    assert.deepEqual(await appearance(),before);
+    assert.equal(await page.evaluate(() => nativeBadge.isConnected && nativeBadge.parentElement===nativeRoots[0]),true);
+    assert.equal(await page.locator('[data-fixture-cosmetic], [data-fixture-paint]').count(),0);
+    assert.equal(await page.evaluate(() => JSON.stringify(fixtureStoredSettings)===sharedBefore),true);
+    assert.deepEqual(await page.evaluate(() => fixtureFfz.saved),['unrelated']);
+    assert.deepEqual(await page.evaluate(() => fixtureFfz.writes),[]);
+    await page.evaluate(() => {
+      for(let i=0;i<2500;i++) fixtureFfz.emotes.emote_sets[`large-${i}`]={__source:'7tv-emotes',emotes:{a:{}}};
+    });
+    const large = await call('poll'); assert.equal(large.status,'ready');
+    assert.equal(large.providers.every(provider=>provider.countsTruncated),true);
+    assert.ok(large.providers.every(provider=>provider.setCount<=2048 && provider.emoteCount<=20000));
+    await page.evaluate(() => { globalThis.BetterTTV={foreign:true}; });
+    const conflict=await call('poll'); assert.equal(conflict.status,'unavailable'); assert.match(conflict.reason,/Competing/);
+    assert.equal(conflict.isolation.status,'released'); assert.equal(conflict.resetRequired,true);
+    assert.equal(await page.evaluate(() => BetterTTV.foreign),true);
+    await call('stop');
+    assert.equal(await page.evaluate(() => __elmychatTwitchAdapterV1.diagnostics().status),'running');
+    assert.equal(await page.evaluate(() => document.querySelectorAll('script[src*="frankerfacez"]').length),0);
+    await page.evaluate(() => __elmychatTwitchAdapterV1.stop({sourceId:'twitch',sessionId:'owner:isolated'}));
+    assert.equal(await page.evaluate(() => beforeStyles.every(([node,raw])=>node.getAttribute('style')===raw)),true);
+  } finally { await browser.close(); }
+});
+
+for (const ignoreIsolation of [true, false]) test(`${ignoreIsolation ? 'unsupported settings isolation' : 'an unexpected FFZ add-on'} blocks enhancement and preserves native chat`, { timeout:30000 }, async () => {
+  const browser=await chromium.launch({channel:'chromium',headless:true});
+  try {
+    const page=await browser.newPage();await page.setContent(source);
+    await page.evaluate(twitchAdapterExpression({sourceId:'twitch',sessionId:'owner:unsupported',width:420}));
+    await page.evaluate(value => { globalThis.fixtureIgnoreIsolation=value; }, ignoreIsolation);
+    await page.route(ffzBootstrapUrl,route=>route.fulfill({contentType:'text/javascript',headers:{'access-control-allow-origin':'*'},body:shim}));
+    const call=operation=>page.evaluate(enhancementExpression({operation,owner:'owner',sessionId:'owner:unsupported',documentUrl:page.url(),emotes:{sevenTv:true},integrity:bootstrap.integrity}));
+    await call('begin');await page.waitForFunction(()=>!!globalThis.fixtureFfz);
+    if (!ignoreIsolation) {
+      assert.equal((await call('poll')).status,'ready');
+      await page.evaluate(()=>fixtureFfz.manager.enabled_addons.push('unrelated-addon'));
+    }
+    const result=await call('poll');assert.equal(result.status,'unavailable');assert.match(result.reason,ignoreIsolation?/isolation is unavailable/:/Unexpected FFZ add-on/);
+    if (ignoreIsolation) assert.deepEqual(await page.evaluate(()=>fixtureFfz.manager.enabled_addons),[]);
+    assert.equal(await page.evaluate(()=>__elmychatTwitchAdapterV1.diagnostics().status),'running');
+    await call('stop');
+  } finally {await browser.close();}
+});
+
 test('in-document enhancement is idempotent, waits for metadata, accepts empty data and fences stale generations', { timeout: 30000 }, async () => {
   const browser = await chromium.launch({ channel: 'chromium', headless: true });
   try {
@@ -81,6 +146,7 @@ test('in-document loader failures and missing APIs preserve native chat and prot
     await fresh('<meta http-equiv="Content-Security-Policy" content="require-trusted-types-for \'script\'">');
     const rejected = await call({ operation: 'begin' });
     assert.equal(rejected.status, 'unavailable'); assert.equal(rejected.resetRequired, false);
+    assert.equal(rejected.isolation.registrationRetained, false);
     await assert.rejects(call({ operation: 'reset' }), /reset ownership changed/);
   } finally { await browser.close(); }
 });

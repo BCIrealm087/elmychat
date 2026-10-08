@@ -50,12 +50,13 @@ test('delayed readiness and empty data do not duplicate begin; status copies can
 test('two bounded download failures latch without injecting or refreshing native chat', async () => {
   let downloads = 0; const calls = [];
   const lifecycle = new TwitchEnhancement(choices, 'owner', { retryMs: 1,
-    download: async () => { downloads += 1; throw new Error('CDN unavailable'); },
+    download: async () => { downloads += 1; throw 'CDN unavailable'; },
     evaluate: async (_, command) => { calls.push(command.operation); return null; } });
   const p = page(), r = record('first'); lifecycle.sync(p, r, url);
   await until(() => lifecycle.diagnostics().status === 'unavailable');
   for (let i = 0; i < 200; i += 1) lifecycle.sync(p, r, url);
   assert.equal(downloads, 2); assert.deepEqual(calls, ['inspect']);
+  assert.equal(lifecycle.diagnostics().reason, 'CDN unavailable');
   assert.equal(lifecycle.diagnostics().resetRequested, false);
   await lifecycle.stop();
 });
@@ -218,4 +219,20 @@ test('pre-install waiting expires without reset and stops promptly without a sec
     if (cancel) assert.equal(calls.filter(operation => operation === 'begin').length, 1);
     assert.equal(lifecycle.diagnostics().resetAttempted, false);
   }
+});
+
+test('health snapshots retain bounded known diagnostics and detach nested isolation records', async () => {
+  const report = { ...status('ready'), reason:'r'.repeat(1000), engineVersion:'v'.repeat(1000),
+    unknownArchive:new Array(10000).fill('unretained'),
+    providers:[{id:'7tv-emotes',moduleReady:true,version:'x'.repeat(1000),setCount:1,emoteCount:2,dataStatus:'available'}],
+    isolation:{status:'isolated',entries:12,settings:[{key:'chat.badges.hidden',priorDefault:'structured-or-computed',applied:{'m-ffz':true}}]} };
+  const lifecycle = new TwitchEnhancement(choices,'owner',{download:async()=>bootstrap,
+    evaluate:async(_,command)=>command.operation==='inspect'?null:command.operation==='stop'?status('unavailable'):report});
+  lifecycle.sync(page(),record('bounded'),url);await until(()=>lifecycle.diagnostics().status==='ready');
+  const snapshot=lifecycle.diagnostics();
+  assert.equal(snapshot.unknownArchive,undefined);assert.equal(snapshot.reason.length,240);
+  assert.equal(snapshot.engineVersion.length,128);assert.equal(snapshot.providers[0].version.length,80);
+  snapshot.isolation.settings[0].applied['m-ffz']=false; report.isolation.settings[0].applied['m-ffz']=false;
+  assert.equal(lifecycle.diagnostics().isolation.settings[0].applied['m-ffz'],true);
+  await lifecycle.stop();
 });

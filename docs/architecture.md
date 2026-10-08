@@ -55,6 +55,8 @@ The core bounds retained history (messages and spacers together) and active sour
 
 Step 7 adds resource/activity diagnostics, bounded active HTTP control requests, linear report-delivery marking and shutdown cleanup of current-run spacers. Accelerated rolling native fixtures exercise removal, retirement, repeated transport recovery, source-pressure isolation and final restoration. See [hardening and support limits](hardening.md); these bookkeeping bounds do not establish process memory, CPU or prolonged live stability guarantees.
 
+Step 12's [compatibility hardening](emote-compatibility.md) registers a bounded document-local FFZ settings provider before bootstrap execution. It isolates stored profiles and reviewed cosmetics without adding platform selectors or rendering to the compositor. The Twitch wrapper verifies the selected provider and fences competing engines; Node retains only bounded diagnostics. Stop cancels Elmychat work and releases scratch settings while an inert local policy may remain for late upstream chunks until the selected Twitch document is reloaded. Full provider unload remains unclaimed.
+
 ## Feasibility questions
 
 1. Can the intended OBS/CEF version expose the selected Browser Source and both native frame contexts through CDP?
