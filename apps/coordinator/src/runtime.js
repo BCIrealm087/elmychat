@@ -265,7 +265,7 @@ export class NativeCoordinator {
             status: batch.diagnostics?.waitingForContainer ? 'waiting' : 'running',
             sessionId: record.sessionId, waitingForContainer: batch.diagnostics?.waitingForContainer ?? false,
             trackedRoots: batch.diagnostics?.trackedRoots ?? null,
-            adapter: batch.diagnostics ? Object.fromEntries(['trackedRoots', 'retiredRoots', 'pendingReports', 'styledNodes', 'added', 'removed', 'resized', 'styleRepairs', 'flushes'].map((key) => [key, batch.diagnostics[key] ?? null])) : null,
+            adapter: batch.diagnostics ? Object.fromEntries(['trackedRoots', 'retiredRoots', 'pendingReports', 'styledNodes', 'added', 'removed', 'resized', 'styleRepairs', 'flushes', 'rendererIdentifiedRoots', 'identityTransfers'].map((key) => [key, batch.diagnostics[key] ?? null])) : null,
           });
           if (source.platform === 'twitch') this.#enhancement.sync(this.#page, record, candidates[0].url);
         } catch (error) {

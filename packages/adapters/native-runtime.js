@@ -1,5 +1,5 @@
 /** Platform-independent browser lifecycle; selectors are supplied by adapter policy. */
-function nativeRuntime(options = {}, policy) {
+function nativeRuntime(options = {}, policy, rendererIdentity) {
   const { key, platform, rootTypes, containerSelector, identityAttributes } = policy;
   const selector = rootTypes.map(type => type.selector).join(',');
   const { sourceId, sessionId, maxRoots = 500, maxReports = 1000 } = options;
@@ -41,20 +41,24 @@ function nativeRuntime(options = {}, policy) {
     if (admissionStyle.textContent !== admissionRule) admissionStyle.textContent = admissionRule;
     if (admissionStyle.parentNode !== document.head) document.head.append(admissionStyle);
   }
-  const counts = { added: 0, removed: 0, resized: 0, styleRepairs: 0, flushes: 0 };
+  const counts = { added: 0, removed: 0, resized: 0, styleRepairs: 0, flushes: 0, identityTransfers: 0 };
   const parseStyle = (raw) => { const node = document.createElement('div'); node.setAttribute('style', raw ?? ''); return node.style; };
   const address = (entry) => ({ sourceId, sessionId, messageId: entry.messageId });
   const authorized = (command) => command?.sourceId === sourceId && command?.sessionId === sessionId;
   const rejected = (reason) => ({ accepted: false, reason });
-  const nativeKeyFor = (node) => {
+  const identityFor = (node) => {
+    let key = null;
     for (const attribute of identityAttributes) {
       const value = node.getAttribute(attribute);
       if (value) {
         if (value.length > 65_536) throw new Error('native-key-limit');
-        return `${attribute}:${value}`;
+        key = `${attribute}:${value}`;
+        break;
       }
     }
-    return null;
+    const rendered = rendererIdentity?.(node) ?? null;
+    // Conflicting DOM/renderer identities cannot justify a host transfer.
+    return { key: key ?? rendered, transferable: !!rendered && (!key || key === rendered) };
   };
 
   // Keep untouched attributes byte-for-byte. When the platform writes styles,
@@ -143,7 +147,7 @@ function nativeRuntime(options = {}, policy) {
   function positionMarker(entry) {
     if (!entry.marker) return;
     const placement = entry.placement;
-    const visible = !entry.retired && placement?.visible && placement.rect.width === width;
+    const visible = entry.node.isConnected && !entry.retired && placement?.visible && placement.rect.width === width;
     const x = (placement?.rect.x ?? 0) + 2;
     const y = (placement?.rect.y ?? 0) + entry.markerTop;
     const area = visible ? placement.clip : null;
@@ -238,18 +242,42 @@ function nativeRuntime(options = {}, policy) {
       // owning card. Ticker/pinned copies outside the list are not admitted.
       const candidates = container ? [...container.querySelectorAll(selector)].filter(node => !node.parentElement?.closest(selector)) : [];
       if (candidates.length > maxRoots) throw new Error('native-root-limit');
+      const identities = new Map(candidates.map(node => [node, identityFor(node)]));
+      const currentKeys = new Map();
+      const priorKeys = new Map();
+      for (const [node, identity] of identities) if (identity.key) {
+        const group = currentKeys.get(identity.key) ?? []; group.push(node); currentKeys.set(identity.key, group);
+      }
+      for (const entry of roots.values()) if (entry.nativeKey) {
+        const group = priorKeys.get(entry.nativeKey) ?? []; group.push(entry); priorKeys.set(entry.nativeKey, group);
+      }
+      // Match only a unique renderer-identified replacement in this same flush.
+      // No detached archive, text matching, cross-session keys or resurrection.
       for (const entry of [...roots.values()]) {
-        const nativeKey = nativeKeyFor(entry.node);
+        const replacements = currentKeys.get(entry.nativeKey);
+        const node = replacements?.[0];
+        if (!entry.node.isConnected && entry.transferable && replacements?.length === 1 &&
+            priorKeys.get(entry.nativeKey)?.length === 1 && identities.get(node).transferable && !roots.has(node)) {
+          resizer.unobserve(entry.node); restoreStyle(entry.node); roots.delete(entry.node);
+          entry.node = node; roots.set(node, entry);
+          if (!entry.retired) resizer.observe(node);
+          counts.identityTransfers += 1;
+        }
+      }
+      for (const entry of [...roots.values()]) {
+        const identity = identities.get(entry.node) ?? identityFor(entry.node);
         if (!entry.node.isConnected || !entry.node.matches(selector)) discard(entry, entry.node.isConnected ? 'selector-lost' : 'node-removed');
         else if (!container?.contains(entry.node)) discard(entry, 'scope-lost');
-        else if (recycled.has(entry.node) || nativeKey !== entry.nativeKey) discard(entry, 'node-reused');
+        else if (recycled.has(entry.node) || identity.key !== entry.nativeKey) discard(entry, 'node-reused');
+        else entry.transferable = identity.transferable;
       }
       recycled.clear();
       for (const node of candidates) {
         if (roots.has(node)) continue;
         if (!Number.isSafeInteger(sequence + 1)) throw new Error('identity-sequence-exhausted');
         const messageKind = rootTypes.find(type => node.matches(type.selector)).kind;
-        const entry = { node, messageId: `${platform}-${++sequence}`, messageKind, nativeKey: nativeKeyFor(node), height: null, measuredWidth: null, gutter: 0, markerTop: 0, delivered: false, retired: false, placement: null };
+        const identity = identities.get(node);
+        const entry = { node, messageId: `${platform}-${++sequence}`, messageKind, nativeKey: identity.key, transferable: identity.transferable, height: null, measuredWidth: null, gutter: 0, markerTop: 0, delivered: false, retired: false, placement: null };
         roots.set(node, entry);
         resizer.observe(node);
       }
@@ -332,10 +360,13 @@ function nativeRuntime(options = {}, policy) {
       try {
         // Mutation observers run before paint. Reused content must not briefly
         // inherit the old identity's slot while discovery waits for a frame.
-        for (const entry of roots.values()) if (recycled.has(entry.node) || nativeKeyFor(entry.node) !== entry.nativeKey) {
-          entry.placement = null;
-          applyStyle(entry.node, rootProperties(entry));
-          positionMarker(entry);
+        for (const entry of roots.values()) {
+          if (!entry.node.isConnected) { positionMarker(entry); continue; }
+          if (recycled.has(entry.node) || identityFor(entry.node).key !== entry.nativeKey) {
+            entry.placement = null;
+            applyStyle(entry.node, rootProperties(entry));
+            positionMarker(entry);
+          }
         }
         schedule();
       } catch (error) { terminate(error.message); }
@@ -359,9 +390,23 @@ function nativeRuntime(options = {}, policy) {
   }
 
   const api = Object.freeze({
-    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, messageWidth: messageWidth(), originMarkers: [...roots.values()].filter(entry => entry.marker).length, gutterMessages: [...roots.values()].filter(entry => entry.gutter).length, revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
+    diagnostics: () => ({ sourceId, sessionId, selector, containerSelector, waitingForContainer, status, failure, width, messageWidth: messageWidth(), originMarkers: [...roots.values()].filter(entry => entry.marker).length, gutterMessages: [...roots.values()].filter(entry => entry.gutter).length, rendererIdentifiedRoots: [...roots.values()].filter(entry => entry.transferable).length, revision, trackedRoots: roots.size, retiredRoots: [...roots.values()].filter((entry) => entry.retired).length, pendingReports: reports.size, styledNodes: styles.size, ...counts }),
     takeReports(command) {
       if (!authorized(command)) return rejected('stale-session');
+      if (status === 'running' && rendererIdentity) {
+        try {
+          let changed = false;
+          // React can reuse a host for identical visible text without a DOM
+          // mutation. Read only established renderer keys during existing drains.
+          for (const entry of roots.values()) if (entry.transferable && identityFor(entry.node).key !== entry.nativeKey) {
+            recycled.add(entry.node); changed = true;
+          }
+          if (changed) {
+            if (frame !== null) cancelAnimationFrame(frame);
+            flush();
+          }
+        } catch (error) { terminate(error.message); }
+      }
       const events = [...reports.values()];
       // Mark delivered roots in one pass, including coalesced add/resize reports.
       if (events.length) for (const entry of roots.values()) if (reports.get(entry.messageId)?.type === 'added') entry.delivered = true;
@@ -451,6 +496,6 @@ function nativeRuntime(options = {}, policy) {
 /** Compile a dependency-free function in Node for direct browser/CDP evaluation.
  * Policy is fixed by the platform module, never supplied by native chat content.
  */
-export function createNativeAdapter(policy) {
-  return new Function('options', `return (${nativeRuntime.toString()})(options, ${JSON.stringify(policy)});`);
+export function createNativeAdapter(policy, rendererIdentity = null) {
+  return new Function('options', `return (${nativeRuntime.toString()})(options, ${JSON.stringify(policy)}, ${rendererIdentity?.toString() ?? 'null'});`);
 }

@@ -1,6 +1,7 @@
 import { createNativeAdapter } from '../native-runtime.js';
 import { twitchMark } from '../platform-marks.js';
 import { nativeMessageSelector, ffzMessageSelector } from './selectors.js';
+import { twitchRendererIdentity } from './identity.js';
 
 // The text selector has operator evidence; data-id remains a synthetic heuristic.
 export const adapterKey = '__elmychatTwitchAdapterV1';
@@ -13,7 +14,7 @@ export const installTwitchAdapter = createNativeAdapter({
   // across a wide OBS source. Typography/whitespace remain owned by Twitch.
   messageWidthLimit: 340,
   originMark: twitchMark,
-});
+}, twitchRendererIdentity);
 
 export function twitchAdapterExpression(options) {
   return `(${installTwitchAdapter.toString()})(${JSON.stringify(options)})`;
