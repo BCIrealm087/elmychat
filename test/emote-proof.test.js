@@ -83,7 +83,7 @@ test('runner reports incomplete rendering honestly, scopes evaluations and alway
     connection:{send:async method=>{if(method==='Browser.getVersion')return{product:'fixture'}; throw new Error('screenshot unsupported');}},
     frames:{evaluate:async(selected,expression)=>{
       assert.equal(selected,context); commands.push(expression);
-      if(expression.includes('diagnostics'))return{status:'running',sourceId:'twitch',sessionId:'native'};
+      if(expression==='globalThis.__elmychatTwitchAdapterV1?.diagnostics() ?? null')return{status:'running',sourceId:'twitch',sessionId:'native'};
       if(expression.includes('"operation":"stop"'))return{stopped:true,enhancerResetRequired:true};
       return {status:'awaiting-render',providers:[{moduleEnabled:true,visibleImages:0}]};
     }},close:()=>{closed=true;},

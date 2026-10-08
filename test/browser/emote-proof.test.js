@@ -18,7 +18,7 @@ const integrity = `sha256-${createHash('sha256').update(shim).digest('base64')}`
 const serveShim = context => context.route(ffzBootstrapUrl,route=>route.fulfill({status:200,contentType:'text/javascript',
   headers:{'access-control-allow-origin':'*'},body:shim}));
 
-for(const sameProcess of [false,true]) test(`emote proof keeps native hosts/order and transparent gaps through ${sameProcess?'page contexts':'OOPIFs'}`,{timeout:60000},async()=>{
+for(const sameProcess of [false,true]) for(const remount of [false,true]) test(`emote proof ${remount?'recovers FFZ host remount and delayed metadata':'keeps native hosts/order'} and transparent gaps through ${sameProcess?'page contexts':'OOPIFs'}`,{timeout:60000},async()=>{
   const fixtures = await startCoordinatorFixtures();
   const profile = await mkdtemp(join(tmpdir(),'elmychat-emotes-'));
   let browser; let runtime; let diagnostic;
@@ -44,16 +44,32 @@ for(const sameProcess of [false,true]) test(`emote proof keeps native hosts/orde
     assert.equal(!!selected.context.sessionId,!sameProcess);
     const call = command => diagnostic.frames.evaluate(selected.context,emoteProofExpression({token:'fixture-proof',...command}));
     const before = runtime.diagnostics().layout.placements;
+    const twitch = page.frames().find(frame=>frame.url()===selected.url);
+    if(remount) await twitch.evaluate(()=>{globalThis.fixtureReplaceHosts=true;globalThis.fixtureMetadataDelay=true;});
     await call({operation:'begin',mode:'both',documentUrl:selected.url,integrity});
     let snapshot;
-    await until(async()=>{snapshot=await call({operation:'poll'});return snapshot.status==='render-observed' && runtime.diagnostics().layout.placements.find(entry=>entry.messageId==='twitch-1').height>before.find(entry=>entry.messageId==='twitch-1').height;});
+    await until(async()=>{
+      snapshot=await call({operation:'poll'});
+      const layout=runtime.diagnostics().layout.placements;
+      return snapshot.status==='render-observed' && snapshot.nativeAdapter.trackedRoots===2 && layout.length===8 &&
+        (remount ? snapshot.hosts.enhancedSelectorRoots===2 && snapshot.hosts.visibleRoots===2 : layout.find(entry=>entry.messageId==='twitch-1')?.height>before.find(entry=>entry.messageId==='twitch-1').height);
+    });
     assert.equal(snapshot.ownership.reparentedRoots,0); assert.equal(snapshot.ownership.changedNativeKeys,0);
     assert.equal(snapshot.ownership.changedTypography,0);
-    assert.ok(snapshot.providers.every(provider=>provider.retainedHostImages>0 && provider.moduleEnabled));
-    for(const entry of before){const after=runtime.diagnostics().layout.placements.find(candidate=>candidate.messageId===entry.messageId&&candidate.sourceId===entry.sourceId);assert.equal(after.sequence,entry.sequence);assert.equal(after.sessionId,entry.sessionId);}
-    const twitch = page.frames().find(frame=>frame.url()===selected.url);
+    assert.ok(snapshot.providers.every(provider=>provider.moduleEnabled));
+    if(remount) {
+      assert.equal(snapshot.ownership.connectedRoots,0);assert.equal(snapshot.ownership.removedRoots,2);
+      assert.ok(snapshot.warnings.some(warning=>warning.includes('original-node retention')));
+      assert.ok(snapshot.providers.every(provider=>provider.retainedHostImages===0));
+      assert.equal(await twitch.evaluate(()=>fixtureEnhancedRoots.every(node=>node.isConnected&&node.ownerDocument===document&&node.parentNode.classList.contains('scroll'))),true);
+      assert.equal(await twitch.evaluate(()=>fixtureEnhancedRoots.every(node=>!node.hasAttribute('data-id'))),true,'Do not invent native keys for FFZ hosts.');
+      await twitch.evaluate(()=>{globalThis.enhancedContent=fixtureEnhancedRoots.map(node=>[node,...node.querySelectorAll('*')]);});
+      for(let i=0;i<3;i++){await runtime.step();await waitForPaint(page,3);}
+      assert.equal(await twitch.evaluate(()=>enhancedContent.every(([node,...children])=>node.isConnected&&children.every(child=>node.contains(child)))),true,'Composition keeps the enhancer-owned nodes and children.');
+    }else assert.ok(snapshot.providers.every(provider=>provider.retainedHostImages>0));
+    for(const entry of before.filter(entry=>!remount || entry.sourceId==='youtube')){const after=runtime.diagnostics().layout.placements.find(candidate=>candidate.messageId===entry.messageId&&candidate.sourceId===entry.sourceId);assert.equal(after.sequence,entry.sequence);assert.equal(after.sessionId,entry.sessionId);}
     assert.deepEqual(await twitch.evaluate(()=>({saved:fixtureFfz.saved,writes:fixtureFfz.writes})),{saved:[],writes:[]});
-    for(const frame of page.frames().filter(frame=>frame!==page.mainFrame())) {
+    for(const frame of page.frames().filter(frame=>frame!==page.mainFrame()&&(!remount||frame!==twitch))) {
       assert.equal(await frame.evaluate(()=>nativeRoots.every((node,i)=>document.contains(node)&&nativeDescendants[i].every(child=>node.contains(child)))),true);
     }
     assert.equal(await page.frameLocator('#youtube').locator('img[data-provider="ffz"]').count(),0);
@@ -69,7 +85,7 @@ for(const sameProcess of [false,true]) test(`emote proof keeps native hosts/orde
     await assert.rejects(call({operation:'begin',mode:'7tv',documentUrl:selected.url,integrity}),/Existing enhancement/);
     assert.ok((await twitch.evaluate(()=>__elmychatTwitchAdapterV1.diagnostics())).status==='running');
     const output=resolve('.runtime/proof');await mkdir(output,{recursive:true});
-    const name=`emote-fixture-${sameProcess?'page':'oopif'}`;
+    const name=`emote-fixture-${sameProcess?'page':'oopif'}${remount?'-remount':''}`;
     await writeFile(join(output,`${name}.png`),bytes);
     await writeFile(join(output,`${name}.json`),JSON.stringify({kind:'synthetic-enhancement-contract',snapshot,
       checks:['scoped-cdp-injection','native-root-identity','stable-sequence','late-image-resize','transparent-gap-pixels','youtube-untouched','no-saved-addon-writes','reset-boundary'],
@@ -93,6 +109,11 @@ test('emote diagnostic distinguishes readiness, rejects unknown dependencies and
   const call=command=>page.evaluate(emoteProofExpression({token:'negative-proof',...command}));
   const begin=()=>call({operation:'begin',mode:'bttv',documentUrl:page.url(),integrity});
   try {
+    await fresh();await page.evaluate(()=>{globalThis.fixtureMetadataDelay='manual';globalThis.fixtureNoEmotes=true;});await begin();
+    await page.waitForFunction(()=>!!globalThis.FrankerFaceZ);
+    const loading=await call({operation:'poll'});assert.equal(loading.status,'loading');assert.equal(loading.providers[0].registered,false);
+    await page.evaluate(()=>fixtureFfz.releaseMetadata());
+    assert.equal((await call({operation:'poll'})).status,'awaiting-render');await call({operation:'stop'});
     await fresh();await page.evaluate(()=>{globalThis.fixtureNoEmotes=true;});await begin();
     await page.waitForFunction(()=>!!globalThis.FrankerFaceZ);
     const empty=await call({operation:'poll'});
@@ -114,6 +135,9 @@ test('emote diagnostic distinguishes readiness, rejects unknown dependencies and
     const tt=await begin();assert.equal(tt.status,'blocked');assert.match(tt.reason,/Bootstrap rejected/);await call({operation:'stop'});
     assert.equal(await page.evaluate(()=>globalThis.__elmychatEmoteProofV1),undefined);
     const retry=await begin();assert.equal(retry.status,'blocked');assert.match(retry.reason,/Bootstrap rejected/);await call({operation:'stop'});
+    await fresh();await page.evaluate(()=>{globalThis.__elmychatTwitchAdapterV1={diagnostics:()=>({status:'failed',failure:'fixture-measurement-failure',trackedRoots:0})};});
+    const failedNative=await begin();assert.equal(failedNative.status,'blocked');assert.match(failedNative.reason,/Native Twitch adapter failed/);
+    assert.equal(failedNative.nativeAdapter.failure,'fixture-measurement-failure');await call({operation:'stop'});
     await fresh();await page.evaluate(()=>{const script=document.createElement('script');script.src='https://cdn.frankerfacez.com/other.js';document.head.append(script);});
     await assert.rejects(begin(),/Existing enhancement/);
   }finally{await browser.close();}

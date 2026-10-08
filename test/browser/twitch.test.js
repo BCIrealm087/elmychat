@@ -71,6 +71,33 @@ async function artGeometry(page) {
   });
 }
 
+test('Twitch tracks FFZ ordinary hosts after selector changes and excludes notices/extensions',async(t)=>{
+  const page=await setup(t);
+  const initial=await drain(page);
+  const core=layout(initial);
+  await call(page,'applyPlacements',{revision:1,placements:core.layout().placements});await idle(page);
+  await page.evaluate(()=>{
+    for(const node of nativeRoots){node.classList.add('chat-line__message');node.setAttribute('data-room-id','fixture-room');node.removeAttribute('data-a-target');}
+    for(const kind of ['chat-line--inline','ffz-notice-line','extension','no-room']) {
+      const node=document.createElement('div');node.className='chat-line__message';node.textContent='Unsupported FFZ row';
+      if(kind!=='no-room')node.setAttribute('data-room-id','fixture-room');
+      if(kind==='extension')node.setAttribute('data-extension','fixture-extension');
+      else if(kind!=='no-room')node.classList.add(kind);
+      document.querySelector('.chrome').append(node);
+    }
+  });
+  const changes=await drain(page);
+  assert.ok(changes.every(event=>event.type==='resized'&&initial.some(entry=>entry.messageId===event.messageId)),JSON.stringify(changes));
+  assert.equal(await page.evaluate(()=>__elmychatTwitchAdapterV1.diagnostics().trackedRoots),2);
+  assert.equal(await page.evaluate(()=>nativeRoots.every((node,i)=>node.isConnected&&nativeDescendants[i].every(child=>node.contains(child))&&getComputedStyle(node).visibility==='visible')),true);
+  await page.evaluate(()=>nativeRoots[0].removeAttribute('data-room-id'));
+  assert.equal((await drain(page)).find(event=>event.messageId===initial[0].messageId)?.reason,'selector-lost');
+  await page.evaluate(()=>nativeRoots[0].setAttribute('data-room-id','fixture-room'));
+  const added=(await drain(page)).find(event=>event.type==='added');assert.ok(added);assert.notEqual(added.messageId,initial[0].messageId);
+  await call(page,'stop');
+  assert.equal(await page.evaluate(()=>beforeStyles.every(([node,raw,css])=>node.getAttribute('style')===raw&&node.style.cssText===css)),true);
+});
+
 test('Twitch ASCII art retains native sidebar wrapping in wide overlays and remeasures narrow ones', { timeout: 30000 }, async (t) => {
   const context = await browser.newContext({ viewport: { width: 840, height: 500 } });
   t.after(() => context.close());
