@@ -179,8 +179,8 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
   const shim = await readFile(new URL('../fixtures/twitch/ffz-proof-shim.js', import.meta.url), 'utf8');
   const integrity = `sha256-${createHash('sha256').update(shim).digest('base64')}`;
   let downloadFailed = false; let downloads = 0;
-  const { operator, base } = await host(t, { createRuntime: config => new NativeCoordinator(config, {
-    createEnhancement: (choices, owner) => new TwitchEnhancement(choices, owner, {
+  const { operator, base } = await host(t, { createRuntime: (config, options) => new NativeCoordinator(config, {
+    ...options, createEnhancement: (choices, owner) => new TwitchEnhancement(choices, owner, {
       download: async () => { downloads += 1; if (downloadFailed) throw new Error('Synthetic download offline'); return { integrity }; }, pollMs: 20, retryMs: 1,
     }),
   }) });
@@ -235,7 +235,8 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
     }
     await choices(true, false);
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready' && !health.sources[0].enhancement.activeWork);
-    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').waitFor();
+    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').waitFor({ state: 'attached' });
+    await until(async () => await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').isVisible());
     assert.equal(await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').count(), 0);
     await preserved();
     await operator.tick(); await waitForPaint(overlay);
@@ -251,7 +252,8 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
     assert.equal(twitchLoads, count);
     await choices(true, true);
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
-    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').waitFor(); await preserved();
+    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').waitFor({ state: 'attached' });
+    await until(async () => await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').isVisible()); await preserved();
     await choices(false, true);
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
     assert.equal(await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').count(), 0); await preserved();
@@ -274,7 +276,16 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
     await choices(false, false);
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'off');
     assert.equal(await overlay.frameLocator('#twitch').locator('img[data-provider="ffz"]').count(), 0); await preserved();
+    await choices(true, true);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    const warmLoads = bootstrapLoads;
+    await controls.getByRole('button', { name: 'Disconnect and restore' }).click(); await complete(controls, 'Coordinator disconnected');
+    await controls.getByRole('button', { name: 'Connect', exact: true }).click(); await complete(controls, 'Coordinator connecting');
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    assert.equal(bootstrapLoads, warmLoads + 1, 'Saved providers must reload once into a clean document on warm reconnect.');
+    assert.equal(await youtubeFrame.evaluate(() => globalThis.documentToken), youtubeToken);
+    assert.deepEqual(operator.state().config.emotes, { sevenTv: true, betterTtv: true });
     const output = resolve('.runtime/proof'); await mkdir(output, { recursive: true });
-    await writeFile(join(output, `operator-emotes-${sameProcess ? 'page' : 'oopif'}.json`), JSON.stringify({ kind: 'synthetic-emote-controls', status: 'passed', checks: ['independent-and-both-providers', 'acknowledged-idempotent-refresh', 'unchanged-YouTube-identities', 'retained-gap-and-spacer', 'selected-overlay-only', 'bounded-explicit-retry', 'saved-choices-after-refresh', 'disable-with-clean-refresh'], limitations: ['Deterministic enhancer shim, not additional live provider/category evidence.'] }, null, 2));
+    await writeFile(join(output, `operator-emotes-${sameProcess ? 'page' : 'oopif'}.json`), JSON.stringify({ kind: 'synthetic-emote-controls', status: 'passed', checks: ['independent-and-both-providers', 'acknowledged-idempotent-refresh', 'unchanged-YouTube-identities', 'retained-gap-and-spacer', 'selected-overlay-only', 'bounded-explicit-retry', 'saved-choices-after-refresh', 'disable-with-clean-refresh', 'saved-choices-after-warm-reconnect'], limitations: ['Deterministic enhancer shim, not additional live provider/category evidence.'] }, null, 2));
   } finally { await operator.close(); await browser?.close(); await rm(profile, { recursive: true, force: true }); }
 });

@@ -498,3 +498,18 @@ test('managed refresh preflight rejects changed/unsupported overlays without sto
   await assert.rejects(runtime.applyEmotes({ sevenTv: true }, expectedUrl), /Selected overlay changed/);
   assert.equal(refreshes.length, 0);
 });
+
+test('managed startup clears a warm Twitch document once before loading saved provider choices', async t => {
+  const expectedUrl = 'https://www.twitch.tv/embed/fixture/chat?parent=127.0.0.1';
+  const { page, runtime, refreshes, loaders } = await emoteRuntime({ refreshTwitchUrl: expectedUrl });
+  t.after(() => runtime.stop());
+  assert.equal(refreshes.length, 1);
+  assert.equal(page.installs, 1, 'YouTube attaches while Twitch waits for a clean generation.');
+  assert.equal(loaders[0].stops, 1);
+  for (let i = 0; i < 5; i += 1) await runtime.step();
+  assert.equal(refreshes.length, 1);
+  page.frames[1] = { ...page.frames[1], context: {} }; await runtime.step();
+  assert.equal(runtime.diagnostics().chatConnected, true);
+  assert.equal(page.installs, 2);
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'ready');
+});

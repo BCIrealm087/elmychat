@@ -79,14 +79,16 @@ export class NativeCoordinator {
   #enhancement;
   #createEnhancement;
   #refresh;
+  #startRefresh;
 
-  constructor(config, { openPage = NativePage.open, clock = () => performance.now(),
+  constructor(config, { openPage = NativePage.open, clock = () => performance.now(), refreshTwitchUrl,
     createEnhancement = (emotes, owner) => new TwitchEnhancement(emotes, owner) } = {}) {
     this.config = validateRuntimeConfig(config);
     this.compositor = new Compositor({ viewport: { width: 0, height: 0 }, gap: this.config.gap, maxEntries: this.config.maxEntries, maxSources: 2 });
     this.#open = openPage;
     this.#clock = clock;
     this.#createEnhancement = createEnhancement;
+    this.#startRefresh = refreshTwitchUrl;
     this.#enhancement = createEnhancement(this.config.sources.find(source => source.platform === 'twitch').emotes, this.#owner);
   }
 
@@ -260,6 +262,17 @@ export class NativeCoordinator {
       this.compositor.setViewport({ width: tops[0].width, height: tops[0].height });
       const matched = this.config.sources.map((source) => frames.filter((frame) => sourceMatches(frame, source)));
       if (matched[0].some((first) => matched[1].some((second) => first.context === second.context))) throw new Error('Source prefixes overlap on the same frame.');
+      const twitchSource = this.config.sources.find(source => source.platform === 'twitch');
+      const twitchFrames = frames.filter(frame => sourceMatches(frame, twitchSource));
+      if (this.#startRefresh && twitchFrames.length === 1 && twitchFrames[0].documentReady !== false) {
+        const expectedUrl = this.#startRefresh;
+        this.#startRefresh = undefined; // One bounded attempt, never a loop.
+        try { await this.#applyEmotes({ emotes: twitchSource.emotes, expectedUrl, retry: true }); }
+        catch (error) {
+          this.#refresh = { revision: null, status: 'unavailable', reason: String(error.message).slice(0,240),
+            oldContext: twitchFrames[0].context, deadline: this.#clock() };
+        }
+      }
       for (const source of this.config.sources) {
         if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
         const candidates = frames.filter((frame) => sourceMatches(frame, source));

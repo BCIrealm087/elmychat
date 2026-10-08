@@ -68,7 +68,7 @@ export class OperatorController {
   #create;
   #discover;
 
-  constructor({ statePath, overlayUrl = 'http://127.0.0.1:3210/overlay', createRuntime = (config) => new NativeCoordinator(config), save = saveAtomic, discoverTargets = discover } = {}) {
+  constructor({ statePath, overlayUrl = 'http://127.0.0.1:3210/overlay', createRuntime = (config, options) => new NativeCoordinator(config, options), save = saveAtomic, discoverTargets = discover } = {}) {
     this.statePath = statePath;
     this.overlayUrl = overlayUrl;
     this.#create = createRuntime;
@@ -84,7 +84,12 @@ export class OperatorController {
     if (state.version !== 1 || typeof state.enabled !== 'boolean') throw new Error('Unsupported operator settings file.');
     this.#config = normalizeOperatorConfig(state.config);
     this.#enabled = state.enabled;
-    if (this.#enabled) this.#runtime = this.#create(operatorRuntimeConfig(this.#config, this.overlayUrl));
+    if (this.#enabled) this.#runtime = this.#managedRuntime();
+  }
+
+  #managedRuntime() {
+    return this.#create(operatorRuntimeConfig(this.#config, this.overlayUrl),
+      { refreshTwitchUrl: sourceUrls(this.#config, new URL(this.overlayUrl).hostname)[0].url });
   }
 
   #exclusive(operation) {
@@ -123,7 +128,7 @@ export class OperatorController {
       await this.#persist(config, true);
       if (this.#runtime) this.#lastHealth = await this.#runtime.stop();
       this.#config = config; this.#legacy = null; this.#enabled = true; this.#revision += 1;
-      this.#runtime = this.#create(operatorRuntimeConfig(config, this.overlayUrl));
+      this.#runtime = this.#managedRuntime();
       return this.state();
     });
   }
@@ -158,7 +163,7 @@ export class OperatorController {
       if (!this.#runtime) {
         if (this.#config) await this.#persist(this.#config, true);
         this.#enabled = true;
-        this.#runtime = this.#create(this.#legacy ?? operatorRuntimeConfig(this.#config, this.overlayUrl));
+        this.#runtime = this.#legacy ? this.#create(this.#legacy) : this.#managedRuntime();
       }
       return this.state();
     });
