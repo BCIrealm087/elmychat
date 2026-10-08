@@ -37,6 +37,22 @@ The step 8 live reports establish basic 7TV/BTTV rendering in OBS 32.2.2 / CEF 1
 
 The operator supplied a combined proof at 18:32:49 UTC on OBS 32.2.2 / CEF 127 with FFZ 4.82.0: 7TV 1.4.34 had decoded visible images, both provider modules were enabled, and native chat remained running. No visible BTTV image was sampled, so the combined result was correctly inconclusive. All 79 sampled original hosts were replaced by enhanced hosts. A subsequent health snapshot recorded 124 Twitch roots but zero renderer-identified roots or transfers. These files establish the live reader failure separately from working 7TV rendering; the coordinator's enhancement status was off because the proof owned the loader.
 
-Source inspection reproduced a concrete cause: the original component-based `getChildNode` call stops at FFZ's scan guard, which our initial fixture omitted. The reader and fixtures now use/model the child-accessor contract above. This is an automated correction; a positive live count and retained-message comparison are still needed before claiming live identity continuity.
+Source inspection reproduced a concrete cause: the original component-based `getChildNode` call stops at FFZ's scan guard, which our initial fixture omitted. The reader and fixtures now use/model the child-accessor contract above. The correction passed Windows/Linux [CI run 37826740965](https://github.com/BCIrealm087/elmychat/actions/runs/37826740965) at commit `dec6784`, with 61 Node and 52 browser tests per OS. The subsequent positive live count and retained-message comparison are recorded below.
 
 The operator also observed pre-existing 7TV names remaining text after late activation while new arrivals rendered correctly. FFZ caches `msg.ffz_tokens`; its automatic reprocessing on `load_tracker:complete:chat-data` depends on `chat.update-when-loaded` and a one-shot `can_reprocess` flag in the inspected ChatLine source. Historical retokenization after provider loading is not guaranteed by our loader. Elmychat does not replace old text itself; FFZ owns tokenization/rerendering. This is a plausible explanation, not proof of those live settings or the exact cache path. Explicitly requesting an FFZ token update during the continuity check can exercise existing messages once the corrected reader is active.
+
+### Positive live reader and retained-identity check, 2026-10-08
+
+After updating the reader, the operator confirmed a positive identified-root count, selected the Twitch iframe in OBS remote DevTools and ran the FFZ token-update snippet. The supplied `identity-before(1).json` and `identity-after.json` snapshots span ordinary arrivals as well as that requested update; they are not a mutation trace of the command itself. Both snapshots retain the same selected target, Twitch session and YouTube session, with healthy native sources and an 800x600 shared viewport. The operator reported no noticeable visual change and continuing correct-looking 7TV emotes.
+
+| Observation | Before | After | Bounded conclusion |
+| --- | --- | --- | --- |
+| Twitch tracked / renderer-identified roots | 4 / 4 | 66 / 66 | The corrected reader identifies every tracked ordinary Twitch host at both endpoints. |
+| Twitch identity transfers | 2 | 2 | Two renderer-verified handoffs had already occurred before the baseline. No additional handoff was recorded during the interval; the requested update is not a demonstrated remount. |
+| Twitch removals | 2 | 2 | No additional removal was recorded across the snapshots. |
+| Baseline Twitch identities | 4 messages | All 4 retained | Local IDs and compositor sequences are unchanged. The 62 later messages are additional arrivals. |
+| One retained Twitch measurement | 30.1875px | 31.1875px | That entry retained identity and sequence through a height change; the snapshots cannot attribute the resize to a specific mutation. |
+| Baseline YouTube identities | 190 messages | All 190 retained | Their local IDs and sequences are unchanged; the session was preserved. |
+| Explicit spacers | None | None | This live interval did not exercise spacer preservation. |
+
+Both reported layouts contain no overlapping adjacent message rectangles. Layout geometry is not pixel/alpha proof. This check establishes bounded live reader operation and retained-identity continuity in the operator's existing OBS setup, plus adapter-reported handoffs before the baseline. It does not establish which DOM descendants changed on the explicit rerender, exact message-specific handoff attribution, original DOM-object retention, all enhancement categories, or prolonged stability. No repeat manual gate is required for step 10; retain automatic coverage and these limits for later work.
