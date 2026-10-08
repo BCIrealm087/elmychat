@@ -8,7 +8,7 @@ The observed OBS environment exposes both native frames as CDP iframe targets an
 
 ## Component boundaries
 
-The next priority after native rendering is optional 7TV/BTTV enhancement inside the Twitch document. The proposed integration uses existing CDP access and a Twitch-specific enhancement lifecycle; third-party code handles emote substitution while Elmychat continues measuring and positioning native hosts. This is planned, with current embed/OBS compatibility unresolved; see [steps 8–13](emote-support-roadmap.md).
+The next priority after native rendering is optional 7TV/BTTV enhancement inside the Twitch document. The proposed integration uses existing CDP access and a Twitch-specific enhancement lifecycle; third-party code handles emote substitution while Elmychat continues measuring and positioning native hosts. The opt-in [step 8 diagnostic](emote-proof.md) is implemented, with current embed/OBS compatibility unresolved; see [steps 8–13](emote-support-roadmap.md).
 
 | Component | Owns | Must not own |
 | --- | --- | --- |

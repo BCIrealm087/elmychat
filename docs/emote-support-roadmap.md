@@ -1,6 +1,6 @@
 # Native chat emote support roadmap
 
-Status: planned, not implemented. Working branch: `codex-improvements`. Research checked 2026-10-08 UTC.
+Status: step 8 diagnostic implemented; live compatibility pending. Steps 9–13 remain planned. Working branch: `codex-improvements`. Research checked 2026-10-08 UTC.
 
 ## Priority and scope
 
@@ -45,7 +45,7 @@ Synthetic fixtures prove our lifecycle, transport and layout contracts; they can
 
 Use the existing pixel/gap, ASCII-art, platform-mark and paint-stability suites throughout. Add fixtures that simulate supported enhancement mutations rather than downloading mutable upstream scripts in every CI run. Keep a separate opt-in actual-loader diagnostic and record the versions/hashes tested. Remote bootstrap and dependent chunks may update independently; a bootstrap hash alone does not pin the full engine. Decide reproducible distribution and licensing before copying or bundling third-party code. Do not disable browser web security or weaken platform CSP as a workaround.
 
-No provider scripts, emote assets or runtime behavior are added by this planning change.
+The opt-in [step 8 diagnostic](emote-proof.md) loads the fixed remote FFZ bootstrap only when explicitly invoked. No third-party scripts/assets are bundled and normal startup remains unchanged.
 
 ## Research sources
 

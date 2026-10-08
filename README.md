@@ -60,4 +60,6 @@ Windows and OBS are the initial operator target; keep the development tooling po
 
 No redistribution license has been selected yet.
 
-The next planned priority after native rendering is [optional 7TV/BTTV support](docs/emote-support-roadmap.md). That roadmap is not implemented; there is currently no emote-provider toggle.
+The next planned priority after native rendering is [optional 7TV/BTTV support](docs/emote-support-roadmap.md). Step 8 now has an opt-in diagnostic; there is currently no production emote-provider toggle.
+
+The opt-in [Twitch emote diagnostic](docs/emote-proof.md) starts the new roadmap: `npm run proof:emotes -- 7tv` (or `bttv`/`both`), followed by `npm run proof:emotes -- reset`. Keep native chat connected. Production provider controls and actual FFZ/OBS compatibility remain pending.

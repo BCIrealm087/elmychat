@@ -17,7 +17,8 @@
     "proof:native": "node scripts/proof/native.js pair",
     "check:syntax": "node scripts/check-syntax.js",
     "check": "npm run check:syntax && npm test",
-    "check:all": "npm run check && npm run test:browser"
+    "check:all": "npm run check && npm run test:browser",
+    "proof:emotes": "node scripts/proof/emotes.js"
   },
   "devDependencies": {
     "playwright": "1.63.0",
