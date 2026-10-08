@@ -8,7 +8,7 @@ The observed OBS environment exposes both native frames as CDP iframe targets an
 
 ## Component boundaries
 
-The next priority after native rendering is optional 7TV/BTTV enhancement inside the Twitch document. The proposed integration uses existing CDP access and a Twitch-specific enhancement lifecycle; third-party code handles emote substitution while Elmychat continues measuring and positioning native hosts. The opt-in [step 8 diagnostic](emote-proof.md) established bounded provider rendering in OBS 32.2.2 / CEF 127 and selects FFZ for lifecycle work. FFZ remounts message hosts inside Twitch's document; retaining the original DOM objects was not achieved. Production lifecycle, identity/layout coverage and controls remain planned; see [steps 8–13](emote-support-roadmap.md).
+The next priority after native rendering is optional 7TV/BTTV enhancement inside the Twitch document. The proposed integration uses existing CDP access and a Twitch-specific enhancement lifecycle; third-party code handles emote substitution while Elmychat continues measuring and positioning native hosts. The opt-in [step 8 diagnostic](emote-proof.md) established bounded provider rendering in OBS 32.2.2 / CEF 127 and selects FFZ for lifecycle work. FFZ remounts message hosts inside Twitch's document; retaining the original DOM objects was not achieved. Step 9 now provides an [asynchronous generation-owned lifecycle](twitch-enhancement.md), separate status and one controlled Twitch-only recovery after partial failure. Identity/layout coverage, saved preferences and controls remain planned; see [steps 8–13](emote-support-roadmap.md).
 
 | Component | Owns | Must not own |
 | --- | --- | --- |

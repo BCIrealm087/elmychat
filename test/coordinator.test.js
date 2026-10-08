@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { NativeCoordinator, validateRuntimeConfig } from '../apps/coordinator/src/runtime.js';
+import { TwitchEnhancement } from '../apps/coordinator/src/twitch-enhancement.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const config = {
   endpoint: 'http://127.0.0.1:9222', targetUrl: 'http://127.0.0.1:3210/native', gap: 12,
@@ -51,6 +53,45 @@ async function attached(options = {}) {
   await runtime.step();
   return { page, runtime };
 }
+
+test('pending enhancement leaves native report/layout/spacing cycles responsive and stops independently', async () => {
+  const page = new Page(); let started = false; let aborted = false;
+  const settings = { ...config, sources: [{ ...config.sources[0], urlPrefix: 'https://www.twitch.tv/embed/fixture/chat', emotes: { sevenTv: true } }, config.sources[1]] };
+  page.frames[1].url = settings.sources[0].urlPrefix;
+  const runtime = new NativeCoordinator(settings, { openPage: async () => page,
+    createEnhancement: (emotes, owner) => new TwitchEnhancement(emotes, owner, {
+      evaluate: async () => null,
+      download: signal => new Promise((_, reject) => { started = true; signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); }, { once: true }); }),
+    }) });
+  await runtime.step(); await delay(0); assert.equal(started, true);
+  page.publish(1, 'added', 'twitch'); page.publish(2, 'added', 'youtube'); await runtime.step();
+  const original = runtime.diagnostics().sources.map(source => source.sessionId);
+  await runtime.control({ type: 'spacer-add', height: 30 });
+  for (let i = 0; i < 100; i += 1) await runtime.step();
+  assert.deepEqual(runtime.diagnostics().sources.map(source => source.status), ['running', 'running']);
+  assert.deepEqual(runtime.diagnostics().sources.map(source => source.sessionId), original);
+  assert.equal(runtime.diagnostics().sources[0].enhancement.status, 'loading');
+  assert.equal(runtime.compositor.entries().length, 3);
+  await runtime.stop(); assert.equal(aborted, true);
+});
+
+test('failed enhancement download is separate from native connection and never triggers a native reinstall', async () => {
+  const page = new Page(); let attempts = 0;
+  const settings = { ...config, sources: [{ ...config.sources[0], urlPrefix: 'https://www.twitch.tv/embed/fixture/chat', emotes: { betterTtv: true } }, config.sources[1]] };
+  page.frames[1].url = settings.sources[0].urlPrefix;
+  const runtime = new NativeCoordinator(settings, { openPage: async () => page,
+    createEnhancement: (emotes, owner) => new TwitchEnhancement(emotes, owner, { evaluate: async () => null, retryMs: 1,
+      download: async () => { attempts += 1; throw new Error('offline'); } }) });
+  await runtime.step();
+  for (let i = 0; i < 100 && runtime.diagnostics().sources[0].enhancement.status !== 'unavailable'; i += 1) await delay(2);
+  page.publish(2, 'added', 'youtube');
+  for (let i = 0; i < 50; i += 1) await runtime.step();
+  assert.equal(runtime.diagnostics().sources[0].enhancement.status, 'unavailable');
+  assert.equal(runtime.diagnostics().chatConnected, true);
+  assert.equal(runtime.compositor.entries()[0].messageId, 'youtube');
+  assert.equal(attempts, 2); assert.equal(page.installs, 2);
+  await runtime.stop();
+});
 
 test('coordinator validates bounds and explicit scoped endpoints', () => {
   assert.equal(validateRuntimeConfig(config).intervalMs, 100);

@@ -29,6 +29,8 @@ Frame navigation/replacement/unload retires the source generation; a unique matc
 
 Socket loss retires compositor identities and reconnects to the pinned target ID. A still-running adapter may be recovered only if its session belongs to this coordinator process's random owner token. A different coordinator's running adapter is left alone and reported as occupied. Navigating the selected page away from its original exact URL suspends operation and restores reachable source styles. Returning that same target to its original URL can recover. Restarting OBS creates new target IDs: restart this coordinator with an explicit new selection.
 
+Optional Twitch emotes use the [step 9 asynchronous lifecycle](twitch-enhancement.md), configured only through explicit JSON for now. Its health status is separate from the native source connection. An owned partial failure may request one scoped Twitch document refresh without stopping the compositor, YouTube or retained spacers; enhancement stays paused afterward. No normal saved setting enables it.
+
 ## Bounds and limits
 
 Exactly two platform sources, up to 32 default frame contexts, 500 tracked roots and 1000 coalesced reports per adapter, 1–500 retained compositor entries, and the last 16 cleanup outcomes. CDP commands have a five-second deadline; cycles remain serial, with at most two concurrent layout writes and no accumulating tick backlog. Root overflow fails closed and requires a refresh rather than repeatedly reinjecting a failing document. CDP frame-attachment diagnostics are capped at 16.

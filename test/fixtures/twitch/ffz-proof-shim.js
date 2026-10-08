@@ -43,7 +43,7 @@
   const settings = {provider:{get:()=>saved}};
   modules.addons=manager; modules['chat.emotes']=emotes; modules.settings=settings;
   const instance = {resolve:id=>modules[id]};
-  globalThis.fixtureFfz = {manager,saved,writes,releaseMetadata:()=>{metadataReady=true;}};
+  globalThis.fixtureFfz = {manager,saved,writes,emotes,modules,releaseMetadata:()=>{metadataReady=true;}};
   globalThis.FrankerFaceZ = {get:()=>instance,version_info:{major:0,minor:0,revision:1,build:'fixture'}};
   globalThis.ffz=instance;
 })();

@@ -60,6 +60,6 @@ Windows and OBS are the initial operator target; keep the development tooling po
 
 No redistribution license has been selected yet.
 
-The current priority after native rendering is [optional 7TV/BTTV support](docs/emote-support-roadmap.md). Step 8 established basic rendering through FFZ in OBS; there is currently no production emote-provider toggle.
+The current priority after native rendering is [optional 7TV/BTTV support](docs/emote-support-roadmap.md). Step 8 established basic rendering through FFZ in OBS. Step 9 adds a bounded asynchronous lifecycle through [explicit coordinator JSON](docs/twitch-enhancement.md); normal saved settings remain off and provider controls are still planned.
 
 The opt-in [Twitch emote diagnostic](docs/emote-proof.md) starts the new roadmap: `npm run proof:emotes -- 7tv` (or `bttv`/`both`), followed by `npm run proof:emotes -- reset`. Keep native chat connected. The bounded live check confirmed provider rendering and reset in OBS 32.2.2 / CEF 127. FFZ replaces native message hosts during startup; original-node retention, enhanced identity/layout coverage and production provider controls remain unresolved.

@@ -1,6 +1,7 @@
 // Diagnostic only. No production preferences, message parsing or layout writes.
 import { nativeMessageSelector, ffzMessageSelector, messageSelector } from './selectors.js';
-export const ffzBootstrapUrl = 'https://cdn.frankerfacez.com/script/script.min.js';
+import { ffzBootstrapUrl } from './ffz-bootstrap.js';
+export { ffzBootstrapUrl } from './ffz-bootstrap.js';
 export const emoteProofKey = '__elmychatEmoteProofV1';
 
 export function emoteProofExpression(command) {

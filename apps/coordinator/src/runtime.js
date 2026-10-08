@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Compositor } from '../../../packages/compositor/index.js';
 import { requireLoopback } from '../../../packages/browser-control/cdp.js';
 import { NativePage } from '../../../packages/browser-control/native-page.js';
+import { validateEmoteOptions } from '../../../packages/adapters/twitch/enhancement.js';
+import { TwitchEnhancement } from './twitch-enhancement.js';
 
 export function validateRuntimeConfig(input) {
   if (!input || typeof input !== 'object') throw new TypeError('Coordinator config is required.');
@@ -18,14 +20,19 @@ export function validateRuntimeConfig(input) {
   if (!Array.isArray(input.sources) || input.sources.length !== 2) throw new Error('Configure exactly Twitch and YouTube.');
   const ids = new Set();
   const platforms = new Set();
-  const sources = input.sources.map(({ id, platform, urlPrefix }) => {
+  const sources = input.sources.map(({ id, platform, urlPrefix, emotes }) => {
     if (typeof id !== 'string' || !id.length || id.length > 512 || ids.has(id)) throw new Error('Source IDs must be unique nonempty strings.');
     if (!['twitch', 'youtube'].includes(platform) || platforms.has(platform)) throw new Error('Configure one source per supported platform.');
     if (typeof urlPrefix !== 'string') throw new Error('Source urlPrefix is required.');
     const url = new URL(urlPrefix);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.hash || url.pathname === '/') throw new Error('Source prefixes require an HTTP(S) chat path without credentials or hash.');
+    if (platform !== 'twitch' && emotes !== undefined) throw new Error('Emote enhancement is Twitch-only.');
+    const choices = platform === 'twitch' ? validateEmoteOptions(emotes) : undefined;
+    if (choices && (choices.sevenTv || choices.betterTtv) && (url.origin !== 'https://www.twitch.tv' || !/^\/embed\/[a-z0-9_]{1,25}\/chat$/.test(url.pathname))) {
+      throw new Error('Emote enhancement requires the selected native Twitch embed.');
+    }
     ids.add(id); platforms.add(platform);
-    return { id, platform, urlPrefix: url.href };
+    return { id, platform, urlPrefix: url.href, ...(choices ? { emotes: choices } : {}) };
   });
   return { endpoint: input.endpoint, targetId: input.targetId, targetUrl: input.targetUrl, gap, maxEntries, intervalMs, sources };
 }
@@ -35,6 +42,11 @@ function matches(url, prefix) {
   const expected = new URL(prefix);
   const pathMatches = actual.pathname === expected.pathname || (expected.pathname.endsWith('/') ? actual.pathname.startsWith(expected.pathname) : actual.pathname.startsWith(`${expected.pathname}/`));
   return actual.origin === expected.origin && pathMatches && [...expected.searchParams].every(([key, value]) => actual.searchParams.get(key) === value);
+}
+
+function sourceMatches(frame, source) {
+  if (frame.topLevel || !matches(frame.url, source.urlPrefix)) return false;
+  return !source.emotes?.sevenTv && !source.emotes?.betterTtv || new URL(frame.url).pathname === new URL(source.urlPrefix).pathname;
 }
 
 export function validateSpacingCommand(command) {
@@ -64,16 +76,20 @@ export class NativeCoordinator {
   #sourceStates = new Map();
   #controls = [];
   #activity = { connections: 0, sessionsStarted: 0, reportsProcessed: 0, layoutWrites: 0, lastCycleMs: 0, longestCycleMs: 0 };
+  #enhancement;
 
-  constructor(config, { openPage = NativePage.open, clock = () => performance.now() } = {}) {
+  constructor(config, { openPage = NativePage.open, clock = () => performance.now(),
+    createEnhancement = (emotes, owner) => new TwitchEnhancement(emotes, owner) } = {}) {
     this.config = validateRuntimeConfig(config);
     this.compositor = new Compositor({ viewport: { width: 0, height: 0 }, gap: this.config.gap, maxEntries: this.config.maxEntries, maxSources: 2 });
     this.#open = openPage;
     this.#clock = clock;
+    this.#enhancement = createEnhancement(this.config.sources.find(source => source.platform === 'twitch').emotes, this.#owner);
   }
 
   diagnostics() {
-    const sources = this.config.sources.map(({ id, platform }) => ({ id, platform, ...this.#sourceStates.get(id) }));
+    const sources = this.config.sources.map(({ id, platform }) => ({ id, platform, ...this.#sourceStates.get(id),
+      ...(platform === 'twitch' ? { enhancement: this.#enhancement.diagnostics() } : {}) }));
     return {
       status: this.#stopping ? 'stopped' : this.#lastError ? 'waiting' : this.#page ? 'connected' : 'waiting',
       targetId: this.#pinnedId ?? null, cycles: this.#cycles, lastError: this.#lastError,
@@ -132,8 +148,9 @@ export class NativeCoordinator {
     }
   }
 
-  async #retire(id, reason, restore = true) {
+  async #retire(id, reason, restore = true, recoverEnhancement = false) {
     const record = this.#records.get(id);
+    if (this.config.sources.find(source => source.id === id)?.platform === 'twitch') this.#enhancement.detach(recoverEnhancement);
     if (record) {
       this.compositor.retireSource(id, record.sessionId);
       this.#records.delete(id);
@@ -191,11 +208,11 @@ export class NativeCoordinator {
         throw new Error('Selected page is not at its original exact URL.');
       }
       this.compositor.setViewport({ width: tops[0].width, height: tops[0].height });
-      const matched = this.config.sources.map((source) => frames.filter((frame) => !frame.topLevel && matches(frame.url, source.urlPrefix)));
+      const matched = this.config.sources.map((source) => frames.filter((frame) => sourceMatches(frame, source)));
       if (matched[0].some((first) => matched[1].some((second) => first.context === second.context))) throw new Error('Source prefixes overlap on the same frame.');
       for (const source of this.config.sources) {
         if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
-        const candidates = frames.filter((frame) => !frame.topLevel && matches(frame.url, source.urlPrefix));
+        const candidates = frames.filter((frame) => sourceMatches(frame, source));
         let record = this.#records.get(source.id);
         if (candidates.length !== 1 || (record && candidates[0].context !== record.context)) {
           await this.#retire(source.id, candidates.length > 1 ? 'ambiguous-source-frame' : 'frame-replaced-or-missing');
@@ -250,9 +267,10 @@ export class NativeCoordinator {
             trackedRoots: batch.diagnostics?.trackedRoots ?? null,
             adapter: batch.diagnostics ? Object.fromEntries(['trackedRoots', 'retiredRoots', 'pendingReports', 'styledNodes', 'added', 'removed', 'resized', 'styleRepairs', 'flushes'].map((key) => [key, batch.diagnostics[key] ?? null])) : null,
           });
+          if (source.platform === 'twitch') this.#enhancement.sync(this.#page, record, candidates[0].url);
         } catch (error) {
           this.#blocked.set(source.id, { context, reason: error.message });
-          await this.#retire(source.id, error.message);
+          await this.#retire(source.id, error.message, true, true);
           this.#sourceStates.set(source.id, { status: 'failed', reason: error.message });
         }
       }
@@ -262,7 +280,7 @@ export class NativeCoordinator {
           try { await this.#command(record, 'retireMessages', { messageIds: [...group.messageIds] }); }
           catch (error) {
             this.#blocked.set(sourceId, { context: record.context, reason: error.message });
-            await this.#retire(sourceId, error.message);
+            await this.#retire(sourceId, error.message, true, true);
             this.#sourceStates.set(sourceId, { status: 'failed', reason: error.message });
           }
         }
@@ -294,7 +312,7 @@ export class NativeCoordinator {
             failed = true;
             const reason = result.reason.message;
             this.#blocked.set(sourceId, { context: record.context, reason });
-            await this.#retire(sourceId, reason);
+            await this.#retire(sourceId, reason, true, true);
             this.#sourceStates.set(sourceId, { status: 'failed', reason });
           }
         }
@@ -318,6 +336,7 @@ export class NativeCoordinator {
     for (const command of this.#controls.splice(0)) command.reject(new Error('Coordinator is stopped.'));
     this.#stopWork = (async () => {
       await this.#work;
+      await this.#enhancement.stop();
       await this.#disconnect('teardown');
       for (const entry of this.compositor.entries()) if (entry.kind === 'spacer') this.compositor.removeSpacer(entry.spacerId);
       return this.diagnostics();

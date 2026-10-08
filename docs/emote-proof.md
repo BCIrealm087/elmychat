@@ -1,6 +1,6 @@
 # Twitch emote compatibility diagnostic (step 8)
 
-Status: diagnostic implemented; bounded provider rendering and operator-confirmed reset establish the FFZ route for lifecycle work in OBS 32.2.2 / CEF 127. Original-host retention was not achieved; category and identity/layout limits are recorded below. This is an opt-in development proof, not the future provider controls. Existing operator settings and normal startup do not enable emote enhancement.
+Status: diagnostic implemented; bounded provider rendering and operator-confirmed reset establish the FFZ route for lifecycle work in OBS 32.2.2 / CEF 127. Original-host retention was not achieved; category and identity/layout limits are recorded below. This is an opt-in development proof, not the future provider controls. Existing operator settings and normal startup do not enable emote enhancement. Step 9 adds a separate [explicit-JSON lifecycle](twitch-enhancement.md); do not run this diagnostic in a document already owned by that lifecycle.
 
 ## One bounded live check
 
@@ -23,7 +23,7 @@ The diagnostic downloads the fixed public FFZ bootstrap, hashes it and injects i
 
 The public bootstrap currently redirects from `/script/script.min.js` to `/static/script.min.js` (HTTP 302, observed 2026-10-08 UTC). The downloader follows up to three redirects within `https://cdn.frankerfacez.com`, with one 30-second deadline, and records the resolved URL and redirect chain. Other origins, HTTP downgrades and credentials in redirect URLs are rejected. The hash covers the final script bytes. A download failure records its stage, CDN URL and bounded underlying error codes (including DNS, TLS and connection timeouts). It occurs before attaching to OBS, so it needs no Twitch reset. Certificates and browser security remain enforced. Preparation time precedes the 60-second observation window.
 
-This isolated enabled-list check is **not full FFZ profile isolation**. The upstream engine can apply default appearance, badges/cosmetics and existing Twitch-origin FFZ profiles. Those settings are observed, not overwritten, by this diagnostic; their emote-only configuration audit belongs to the following lifecycle step. Removing a script tag cannot undo upstream hooks/styles/sockets. Always reset afterward, including after a partial failure. No provider scripts or assets are bundled here.
+This isolated enabled-list check is **not full FFZ profile isolation**. The upstream engine can apply default appearance, badges/cosmetics and existing Twitch-origin FFZ profiles. Those settings are observed, not overwritten, by this diagnostic; their appearance/isolation audit remains step 12 work before final support. Removing a script tag cannot undo upstream hooks/styles/sockets. Always reset afterward, including after a partial failure. No provider scripts or assets are bundled here.
 
 ## Evidence and outcomes
 
