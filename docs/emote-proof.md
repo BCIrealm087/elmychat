@@ -1,6 +1,6 @@
 # Twitch emote compatibility diagnostic (step 8)
 
-Status: diagnostic implemented; actual FFZ/Twitch/OBS compatibility remains pending. This is an opt-in development proof, not the future provider controls. Existing operator settings and normal startup do not enable emote enhancement.
+Status: diagnostic implemented; bounded provider rendering and operator-confirmed reset establish the FFZ route for lifecycle work in OBS 32.2.2 / CEF 127. Original-host retention was not achieved; category and identity/layout limits are recorded below. This is an opt-in development proof, not the future provider controls. Existing operator settings and normal startup do not enable emote enhancement.
 
 ## One bounded live check
 
@@ -44,7 +44,7 @@ FFZ's inspected ChatLine renderer uses `div.chat-line__message[data-room-id]` an
 | `blocked` | A scoped precondition, bootstrap, capability, dependency, preference or host-parent check failed. The reason is recorded. |
 | `cancelled` | The user stopped the diagnostic before its observation window ended. |
 
-DOM visibility counts do not prove clipping, pixel correctness, animation or scene alpha. A module-ready flag does not prove channel identity mapping or emote rendering. Bootstrap integrity pins only the fetched bootstrap, not its dependent chunks or add-ons. FFZ's remote APIs may change; unreviewed dependencies are rejected. The remaining critical step-8 evidence is the exact Twitch embed in the operator's OBS/CEF build. Record its OBS version and the three reports/screenshots, plus which emote categories and native text/badge/ASCII-art behavior were observed. Until then, no live category, full lifecycle, production toggle or compatibility claim is complete.
+DOM visibility counts do not prove clipping, pixel correctness, animation or scene alpha. A module-ready flag does not prove channel identity mapping or emote rendering. Bootstrap integrity pins only the fetched bootstrap, not its dependent chunks or add-ons. FFZ's remote APIs may change; unreviewed dependencies are rejected. The live evidence below establishes only basic provider rendering in the tested build. No specific emote category, exact native text/badge/ASCII-art equivalence, full lifecycle or production toggle is established by that bounded result.
 
 For an explicitly configured managed overlay, supply a local JSON file as a second argument:
 
@@ -69,6 +69,26 @@ See [the roadmap](emote-support-roadmap.md) and its primary upstream source link
 
 ## Live finding: host transition, 2026-10-08 UTC
 
-The operator's report identifies OBS 32.2.2 / CEF Chrome 127.0.6533.120, FFZ 4.82.0 and `7tv-emotes` 1.4.34. The engine/add-on loaded two sets totaling 784 emotes. All seven baseline message hosts were disconnected by the first one-second sample; none of the previous selector's images were detected. The operator observed Twitch disappear while YouTube continued, and a Twitch-only reset restored it. An earlier attempt also hit `Unknown add-on id` before metadata readiness. These are failure evidence, not a successful compatibility gate. The markup/getter corrections have automatic coverage; visibility and emote output in this actual build still require the bounded recheck.
+The operator's initial report identifies OBS 32.2.2 / CEF Chrome 127.0.6533.120, FFZ 4.82.0 and `7tv-emotes` 1.4.34. The engine/add-on loaded two sets totaling 784 emotes. All seven baseline message hosts were disconnected by the first one-second sample; none of the previous selector's images were detected. The operator observed Twitch disappear while YouTube continued, and a Twitch-only reset restored it. An earlier attempt also hit `Unknown add-on id` before metadata readiness. These are failure evidence, not a successful compatibility gate. The markup/getter corrections have automatic coverage and the subsequent live result is recorded below.
 
 Primary selector evidence: [FFZ Twitch ChatLine](https://github.com/FrankerFaceZ/FrankerFaceZ/blob/master/src/sites/twitch-twilight/modules/chat/line.js), `ffzNewRender` ordinary host output and delayed `forceUpdate`; metadata/getter evidence: [FFZ add-on manager](https://github.com/FrankerFaceZ/FrankerFaceZ/blob/master/src/addons.ts), `hasAddon`, `isAddonExternal`, `isAddonEnabled` and `getVersion`.
+
+## Live recheck and route decision, 2026-10-08 UTC
+
+After the selector/readiness corrections, the operator reported that all three modes and reset worked. The supplied reports identify OBS 32.2.2, CEF Chrome 127.0.6533.120 and CDP 1.3, using the isolated iframe-target transport. Successful runs report FFZ 4.82.0 (serialized as `4.82.0.0.`). The following is sanitized aggregate evidence; runtime reports and chat screenshots are not committed.
+
+| Report timestamp (UTC) | Mode | Recorded result |
+| --- | --- | --- |
+| 02:10:07.890 | 7TV | `render-observed`, 61 samples. `7tv-emotes` 1.4.34: 2 sets / 212 emotes; first positive sample has 1 decoded, visible provider image, 4 current roots, all visible, and a running adapter. |
+| 02:15:39.513 | BTTV | `blocked`, no samples: existing enhancement or proof detected. This attachment does not verify the separately operator-confirmed BTTV-only success. |
+| 02:18:35.067 | Both | `render-observed`, 61 samples. 7TV 1.4.34: 2 sets / 212 emotes; `ffzap-bttv` 3.3.24: 3 sets / 109 emotes. First positive sample has 1 decoded, visible image for each provider, 10 current roots / 8 visible, and a running adapter. |
+
+Both successful runs recorded an unchanged saved enabled list and no sampled CSP violations. The loader followed one same-origin HTTP 302 from `https://cdn.frankerfacez.com/script/script.min.js` to `https://cdn.frankerfacez.com/static/script.min.js`; the 795-byte bootstrap had integrity `sha256-faQFbO/sGGT+KzeiEL/FQsCl8iBa2LlMT55QDGr7NxA=`. This pins only the observed bootstrap bytes. Set totals describe these runs, not a provider support guarantee.
+
+All sampled baseline hosts were removed (3 in 7TV; 5 in both), along with their baseline badge nodes. Positive images were in replacement hosts matching the FFZ selector, inside the selected Twitch document, with adapter width 340px. Zero retained-host images and zero connected baseline roots mean the original-node retention criterion was not met. Unchanged typography/key counters on removed roots do not demonstrate equivalence. The combined run's last sample returned to `awaiting-render` with no visible provider images; the earlier positive sample remains the evidence, without a claim of continuous image visibility.
+
+Diagnostic cleanup reported its work stopped and an enhancer reset still required. The operator separately confirmed reset worked; the cleanup flag itself is not proof that FFZ unloaded. The BTTV-only attachment's existing-enhancer blocker does not contradict provider images in the combined run, but is kept distinct from a passing standalone report. No additional routine live gate is required to select this route for development.
+
+**Decision:** proceed with FFZ and its 7TV/BTTV add-ons for step 9's bounded lifecycle. Step 8's route decision is complete for basic rendering in current Twitch/FFZ-owned hosts, accepting upstream remounts rather than original DOM-object retention. Elmychat still does not clone, reparent or recreate message content. This does not establish identity continuity, exact text/badge/ASCII-art equivalence, animated/wide/overlay/personal emotes, isolated FFZ appearance settings, prolonged stability or production readiness. Those limits remain in steps 9–13.
+
+The corrected diagnostic and regressions passed [Windows/Linux CI run 37716250460](https://github.com/BCIrealm087/elmychat/actions/runs/37716250460), with 50 Node and 37 browser tests per OS. Synthetic coverage includes delayed strict add-on metadata, FFZ host remounts, selector exclusions, current-host geometry and source-only reset; it remains distinct from the actual-loader evidence above.
