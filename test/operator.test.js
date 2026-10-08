@@ -155,3 +155,67 @@ test('local HTTP controls validate writes, origin, nonce, Host, body bounds and 
   assert.equal((await post('/api/disconnect', '{}')).status, 200);
   assert.equal((await post('/api/spacing', JSON.stringify({ type: 'spacer-add', height: 1 }))).status, 409);
 });
+
+test('old saved settings default providers off; independent choices persist through reload and source edits', async t => {
+  const { operator, statePath } = await controller(t);
+  await writeFile(statePath, JSON.stringify({ version: 1, enabled: false, config: settings }));
+  await operator.load();
+  assert.deepEqual(operator.state().config.emotes, { sevenTv: false, betterTtv: false });
+  for (const emotes of [{ sevenTv: true }, { betterTtv: true }, { sevenTv: true, betterTtv: true }, {}]) {
+    await operator.configure({ ...settings, emotes });
+    const saved = JSON.parse(await readFile(statePath, 'utf8'));
+    assert.deepEqual(saved.config.emotes, { sevenTv: false, betterTtv: false, ...emotes });
+    const reloaded = new OperatorController({ statePath, createRuntime: factory });
+    await reloaded.load();
+    assert.deepEqual(reloaded.state().config.emotes, saved.config.emotes);
+    await reloaded.close();
+  }
+  await operator.configure({ ...settings, emotes: { sevenTv: true, betterTtv: true } });
+  await operator.configure({ ...settings, channel: 'another' });
+  assert.deepEqual(operator.state().config.emotes, { sevenTv: true, betterTtv: true });
+  assert.deepEqual(operatorRuntimeConfig(operator.state().config, operator.overlayUrl).sources[0].emotes, operator.state().config.emotes);
+  for (const emotes of [null, [], { sevenTv: 'true' }, { betterTtv: 1 }, { unknown: true }]) assert.throws(() => normalizeOperatorConfig({ ...settings, emotes }));
+});
+
+test('emote persistence or refresh preflight failure leaves live runtime and saved preferences intact', async t => {
+  let fail = false;
+  const runtimes = [];
+  const { operator, statePath } = await controller(t, {
+    createRuntime: config => { const runtime = factory(config); runtimes.push(runtime); return runtime; },
+    save: async (path, state) => { if (fail) throw new Error('Disk full'); await writeFile(path, JSON.stringify(state)); },
+  });
+  await operator.configure(settings);
+  await operator.spacing({ type: 'spacer-add', height: 71 });
+  const spacer = operator.state().spacers[0];
+  fail = true;
+  await assert.rejects(operator.emotes({ emotes: { sevenTv: true } }), /Disk full/);
+  fail = false;
+  await assert.rejects(operator.emotes({ emotes: { sevenTv: true } }), /Wait for the selected OBS overlay/);
+  assert.equal(runtimes.length, 1);
+  assert.equal(runtimes[0].diagnostics().status, 'waiting');
+  assert.deepEqual(operator.state().spacers, [spacer]);
+  assert.deepEqual(operator.state().config.emotes, { sevenTv: false, betterTtv: false });
+  assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')).config.emotes, operator.state().config.emotes);
+  assert.deepEqual(runtimes[0].config.sources[0].emotes, operator.state().config.emotes);
+  for (const input of [null, [], { emotes: { sevenTv: 1 } }, { retry: 'yes' }, { unknown: true }]) assert.throws(() => operator.emotes(input));
+  await operator.disconnect();
+  await assert.rejects(operator.emotes({ retry: true }), /Connect before applying/);
+});
+
+test('emote API uses the same origin/nonce validation and validates provider choices', async t => {
+  const { operator } = await controller(t, { createRuntime: config => { const runtime = factory(config); runtime.applyEmotes = async () => ({ accepted: true }); return runtime; } });
+  const server = createCoordinatorServer({ operator });
+  t.after(() => new Promise(done => server.close(done)));
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const { token } = await (await fetch(`${base}/api/state`)).json();
+  const headers = { Origin: base, 'X-Elmychat-Token': token, 'Content-Type': 'application/json' };
+  const post = (body, changes = {}) => fetch(`${base}/api/emotes`, { method: 'POST', headers: { ...headers, ...changes }, body: JSON.stringify(body) });
+  assert.equal((await post({ emotes: { sevenTv: true } }, { Origin: 'https://elsewhere.test' })).status, 403);
+  assert.equal((await post({}, { 'X-Elmychat-Token': 'wrong' })).status, 403);
+  await operator.configure(settings);
+  assert.equal((await post({ emotes: { sevenTv: 'yes' } })).status, 400);
+  const changed = await post({ emotes: { sevenTv: true, betterTtv: true } });
+  assert.equal(changed.status, 200);
+  assert.deepEqual((await changed.json()).config.emotes, { sevenTv: true, betterTtv: true });
+});

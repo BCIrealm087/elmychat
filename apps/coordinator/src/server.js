@@ -46,7 +46,7 @@ export function createCoordinatorServer({ health = () => ({ status: 'ok', phase:
     }
     try {
       if (!allowedHosts.includes(host)) throw denied('Use the local coordinator address.', 403);
-      if (operator && request.method === 'POST' && ['/api/config', '/api/connect', '/api/disconnect', '/api/spacing'].includes(pathname)) {
+      if (operator && request.method === 'POST' && ['/api/config', '/api/connect', '/api/disconnect', '/api/spacing', '/api/emotes'].includes(pathname)) {
         if (request.headers.origin !== `http://${host}` || request.headers['x-elmychat-token'] !== token) throw denied('Open the local controls page to perform this action.', 403);
         if (request.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw denied('Send application/json.', 415);
         if (activeControls >= 16) throw denied('Too many active control requests; retry after pending requests finish.', 503);
@@ -57,6 +57,7 @@ export function createCoordinatorServer({ health = () => ({ status: 'ok', phase:
           if (pathname === '/api/config') state = await operator.configure(input);
           else if (pathname === '/api/connect') state = await operator.connect();
           else if (pathname === '/api/disconnect') state = await operator.disconnect();
+          else if (pathname === '/api/emotes') state = await operator.emotes(input);
           else state = await operator.spacing(input);
           send(200, { ...state, token });
         } finally { activeControls -= 1; }

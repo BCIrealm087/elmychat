@@ -3,6 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NativeCoordinator, validateRuntimeConfig, validateSpacingCommand } from './runtime.js';
 import { discover } from '../../../packages/browser-control/cdp.js';
+import { validateEmoteOptions } from '../../../packages/adapters/twitch/enhancement.js';
 
 export function normalizeOperatorConfig(input) {
   if (!input || typeof input !== 'object') throw new TypeError('Source settings are required.');
@@ -23,7 +24,7 @@ export function normalizeOperatorConfig(input) {
   validateSpacingCommand({ type: 'gap', height: gap });
   const targetId = input.targetId === '' ? undefined : input.targetId ?? undefined;
   if (targetId !== undefined && (typeof targetId !== 'string' || !targetId.length || targetId.length > 512)) throw new TypeError('Invalid selected Browser Source.');
-  return { channel, videoId, debugPort, gap, ...(targetId ? { targetId } : {}) };
+  return { channel, videoId, debugPort, gap, emotes: validateEmoteOptions(input.emotes), ...(targetId ? { targetId } : {}) };
 }
 
 export function sourceUrls(config, hostname = '127.0.0.1') {
@@ -39,7 +40,7 @@ export function operatorRuntimeConfig(config, overlayUrl) {
   return validateRuntimeConfig({
     endpoint: `http://127.0.0.1:${config.debugPort}`, targetUrl: overlayUrl, ...(config.targetId ? { targetId: config.targetId } : {}), gap: config.gap,
     sources: [
-      { id: 'twitch', platform: 'twitch', urlPrefix: `https://www.twitch.tv/embed/${config.channel}/chat` },
+      { id: 'twitch', platform: 'twitch', urlPrefix: `https://www.twitch.tv/embed/${config.channel}/chat`, emotes: config.emotes },
       { id: 'youtube', platform: 'youtube', urlPrefix: `https://www.youtube.com/live_chat?v=${config.videoId}` },
     ],
   });
@@ -113,13 +114,41 @@ export class OperatorController {
   async tick() { if (this.#runtime) return this.#runtime.step(); return this.health(); }
 
   configure(input) {
-    const config = normalizeOperatorConfig(input);
+    const normalized = normalizeOperatorConfig(input);
+    const emotesSpecified = input.emotes !== undefined;
     return this.#exclusive(async () => {
+      // Ordinary source edits preserve the separately saved provider choices.
+      const config = { ...normalized, emotes: emotesSpecified ? normalized.emotes : this.#config?.emotes ?? normalized.emotes };
       // A failed disk write leaves the currently working session untouched.
       await this.#persist(config, true);
       if (this.#runtime) this.#lastHealth = await this.#runtime.stop();
       this.#config = config; this.#legacy = null; this.#enabled = true; this.#revision += 1;
       this.#runtime = this.#create(operatorRuntimeConfig(config, this.overlayUrl));
+      return this.state();
+    });
+  }
+  emotes(input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['emotes', 'retry'].includes(key)) ||
+        input.retry !== undefined && typeof input.retry !== 'boolean') throw new TypeError('Invalid emote action.');
+    const choices = input.emotes === undefined ? undefined : validateEmoteOptions(input.emotes);
+    return this.#exclusive(async () => {
+      if (!this.#config || this.#legacy) throw new Error('Save managed source settings before changing Twitch emotes.');
+      if (!this.#runtime) throw new Error('Connect before applying Twitch emotes.');
+      const emotes = choices ?? this.#config.emotes;
+      const previous = this.#config;
+      const config = { ...previous, emotes };
+      const changed = JSON.stringify(previous.emotes) !== JSON.stringify(emotes);
+      if (!changed && !input.retry) return this.state();
+      // Write before touching a live document; disk failures leave it intact.
+      await this.#persist(config);
+      try {
+        await this.#runtime.applyEmotes(emotes, sourceUrls(config, new URL(this.overlayUrl).hostname)[0].url, !!input.retry);
+      } catch (error) {
+        try { await this.#persist(previous); }
+        catch (rollback) { throw new Error(`${error.message} Saved preference rollback failed: ${rollback.message}`); }
+        throw error;
+      }
+      this.#config = config;
       return this.state();
     });
   }

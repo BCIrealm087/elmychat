@@ -29,7 +29,7 @@ Frame navigation/replacement/unload retires the source generation; a unique matc
 
 Socket loss retires compositor identities and reconnects to the pinned target ID. A still-running adapter may be recovered only if its session belongs to this coordinator process's random owner token. A different coordinator's running adapter is left alone and reported as occupied. Navigating the selected page away from its original exact URL suspends operation and restores reachable source styles. Returning that same target to its original URL can recover. Restarting OBS creates new target IDs: restart this coordinator with an explicit new selection.
 
-Optional Twitch emotes use the [step 9 asynchronous lifecycle](twitch-enhancement.md), configured only through explicit JSON for now. Its health status is separate from the native source connection. An owned partial failure may request one scoped Twitch document refresh without stopping the compositor, YouTube or retained spacers; enhancement stays paused afterward. No normal saved setting enables it.
+Optional Twitch emotes use the [step 9 asynchronous lifecycle](twitch-enhancement.md), configured through explicit JSON or step 11 saved managed preferences. Its health status is separate from the native source connection. An owned partial failure may request one scoped Twitch document refresh without stopping the compositor, YouTube or retained spacers; enhancement stays paused afterward. Old settings default providers off. Managed apply/retry actions use the selected overlay helper and a unique acknowledged Twitch refresh revision; YouTube, gap and spacers stay in the same coordinator. See [operator controls](operator-controls.md#twitch-emotes).
 
 ## Bounds and limits
 

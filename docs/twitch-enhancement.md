@@ -1,6 +1,6 @@
 # Twitch enhancement lifecycle (step 9)
 
-Step 9 implements an opt-in FFZ lifecycle in the existing native coordinator. Normal saved settings keep providers off. Provider preferences, controls and explicit apply/retry actions remain step 11 work; step 10 adds [bounded enhanced identity/layout](enhanced-content.md). The [step 8 evidence](emote-proof.md) supports the basic rendering route, not production readiness or every emote category.
+Step 9 implements an opt-in FFZ lifecycle in the existing native coordinator. Old saved settings default providers off. Step 11 adds [saved choices and managed apply/retry controls](operator-controls.md#twitch-emotes); step 10 adds [bounded enhanced identity/layout](enhanced-content.md). The [step 8 evidence](emote-proof.md) supports the basic rendering route, not production readiness or every emote category.
 
 ## Explicit development configuration
 
@@ -15,7 +15,7 @@ In an explicit coordinator JSON file, use an exact Twitch channel prefix and add
 }
 ```
 
-Either choice may be false. Missing choices default to false; unknown keys, non-boolean values, YouTube enhancement, and non-Twitch/partial embed paths are rejected. Run the existing explicit JSON workflow with `npm start -- .runtime/coordinator.json`. This is a development configuration surface, not a new saved-setting or control-page toggle. Applying provider changes currently means stopping that configured runtime and refreshing Twitch to clear its retained enhancer before starting the changed configuration. A running enhancer cannot be removed by deleting its script tag.
+Either choice may be false. Missing choices default to false; unknown keys, non-boolean values, YouTube enhancement, and non-Twitch/partial embed paths are rejected. Run the existing explicit JSON workflow with `npm start -- .runtime/coordinator.json`. The managed controls persist the same validated choices. Explicit command-line configurations remain supported; their provider choices are edited in that file, while saving source fields switches to managed settings. Managed provider changes use a dedicated acknowledged Twitch-only refresh; editing an explicit file still requires stopping that configured runtime and refreshing Twitch before starting the changed configuration. A running enhancer cannot be removed by deleting its script tag.
 
 The bootstrap URL remains fixed. Node downloads and hashes the approved HTTPS FFZ bootstrap before in-frame injection, using the same redirect, deadline and size checks as the proof. Caller cancellation also aborts the download. Upstream chunks/add-ons are still mutable; no third-party implementation or assets are bundled. Existing enhancer/proof instances and saved enabled add-ons are blockers. The enabled list is cloned and dependencies enabled in reviewed order without saving. This does not isolate all FFZ profiles or default cosmetics; the appearance audit and broader isolation remain step 12 work, before final support.
 

@@ -399,3 +399,102 @@ test('spacing pressure rejects excess commands and shutdown settles every queued
   assert.equal(runtime.diagnostics().resources.pendingControls, 0);
   assert.equal(runtime.config.gap, 12);
 });
+
+async function emoteRuntime(options = {}) {
+  const page = new Page();
+  const managed = { ...config, targetUrl: 'http://127.0.0.1:3210/overlay', sources: [{ id: 'twitch', platform: 'twitch', urlPrefix: 'https://www.twitch.tv/embed/fixture/chat' }, config.sources[1]] };
+  page.frames[0].url = managed.targetUrl;
+  page.frames[1].url = `${managed.sources[0].urlPrefix}?parent=127.0.0.1`;
+  const refreshes = [];
+  let inspectionError;
+  let acknowledge = true;
+  page.frames.evaluate = async (context, expression) => {
+    assert.equal(context, page.frames[0].context);
+    const command = JSON.parse(expression.match(/return api\.twitch\((\{.*\})\);/)[1]);
+    if (command.operation === 'inspect') { if (inspectionError) throw new Error(inspectionError); return { available: true }; }
+    refreshes.push(command);
+    if (!acknowledge) throw new Error('Lost response');
+    return { acknowledged: true, revision: command.revision };
+  };
+  const loaders = [];
+  const runtime = new NativeCoordinator(managed, { openPage: async () => page, ...options,
+    createEnhancement: (emotes, owner) => {
+      const loader = { emotes, owner, stops: 0, syncs: 0,
+        diagnostics: () => ({ status: emotes.sevenTv || emotes.betterTtv ? 'loading' : 'off', providers: [] }),
+        sync() { this.syncs += 1; }, detach() {}, async stop() { this.stops += 1; } };
+      loaders.push(loader); return loader;
+    } });
+  await runtime.step();
+  return { page, runtime, refreshes, loaders, expectedUrl: page.frames[1].url,
+    setInspectionError(value) { inspectionError = value; }, setAcknowledge(value) { acknowledge = value; } };
+}
+
+test('provider apply/retry uses one acknowledged Twitch refresh and preserves YouTube, gap and spacer identities', async t => {
+  const { page, runtime, refreshes, loaders, expectedUrl } = await emoteRuntime();
+  t.after(() => runtime.stop());
+  page.publish(1, 'added', 'twitch-before'); page.publish(2, 'added', 'youtube-before'); await runtime.step();
+  await runtime.control({ type: 'gap', height: 17 });
+  const spacer = (await runtime.control({ type: 'spacer-add', height: 51 })).entry;
+  const youtube = runtime.compositor.entries().find(entry => entry.sourceId === 'y');
+  const session = runtime.diagnostics().sources[1].sessionId;
+  const oldContext = page.frames[1].context;
+  await runtime.applyEmotes({ sevenTv: true }, expectedUrl);
+  assert.equal(refreshes.length, 1); assert.equal(loaders[0].stops, 1);
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'requested');
+  assert.equal(runtime.compositor.entries().some(entry => entry.messageId === 'twitch-before'), false);
+  for (let i = 0; i < 5; i += 1) await runtime.step();
+  assert.equal(refreshes.length, 1); assert.equal(page.installs, 2, 'Old Twitch context must not be reattached.');
+  page.frames[1] = { ...page.frames[1], context: {} };
+  await runtime.step();
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'ready');
+  assert.equal(page.installs, 3); assert.notEqual(page.frames[1].context, oldContext);
+  assert.deepEqual(runtime.compositor.entries().find(entry => entry.sourceId === 'y'), youtube);
+  assert.equal(runtime.diagnostics().sources[1].sessionId, session);
+  assert.equal(runtime.config.gap, 17);
+  assert.equal(runtime.compositor.layout().spacers[0].spacerId, spacer.spacerId);
+  await runtime.applyEmotes({ sevenTv: true }, expectedUrl);
+  assert.equal(refreshes.length, 1, 'Unchanged choices are a no-op.');
+  await runtime.applyEmotes({ sevenTv: true }, expectedUrl, true);
+  assert.equal(refreshes.length, 2); assert.notEqual(refreshes[0].revision, refreshes[1].revision);
+  page.frames[1] = { ...page.frames[1], context: {} }; await runtime.step();
+  await runtime.applyEmotes({}, expectedUrl);
+  assert.equal(refreshes.length, 3);
+  page.frames[1] = { ...page.frames[1], context: {} }; await runtime.step();
+  assert.equal(runtime.diagnostics().sources[0].enhancement.status, 'off');
+  assert.deepEqual(runtime.compositor.entries().find(entry => entry.sourceId === 'y'), youtube);
+});
+
+test('unacknowledged refresh is bounded, does not reload in a loop, and reconnects only on a fresh context', async t => {
+  let now = 0;
+  const { page, runtime, refreshes, expectedUrl, setAcknowledge } = await emoteRuntime({ clock: () => now });
+  t.after(() => runtime.stop());
+  setAcknowledge(false);
+  await runtime.applyEmotes({ betterTtv: true }, expectedUrl);
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'unconfirmed');
+  now = 20000;
+  for (let i = 0; i < 20; i += 1) await runtime.step();
+  assert.equal(refreshes.length, 1);
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'unavailable');
+  assert.equal(runtime.diagnostics().sources[1].status, 'running');
+  assert.equal(page.installs, 3, 'Native chat resumes while enhancement stays paused.');
+  assert.equal(runtime.diagnostics().sources[0].status, 'running');
+  page.frames[1] = { ...page.frames[1], context: {}, documentReady: false };
+  await runtime.step(); assert.equal(page.installs, 3);
+  page.frames[1].documentReady = true; await runtime.step();
+  assert.equal(runtime.diagnostics().sources[0].refresh.status, 'ready');
+  assert.equal(page.installs, 4);
+});
+
+test('managed refresh preflight rejects changed/unsupported overlays without stopping the existing loader', async t => {
+  const { page, runtime, refreshes, loaders, expectedUrl, setInspectionError } = await emoteRuntime();
+  t.after(() => runtime.stop());
+  const sessions = runtime.diagnostics().sources.map(source => source.sessionId);
+  setInspectionError('Managed overlay is unavailable');
+  await assert.rejects(runtime.applyEmotes({ sevenTv: true }, expectedUrl), /Managed overlay/);
+  assert.deepEqual(runtime.diagnostics().sources.map(source => source.sessionId), sessions);
+  assert.equal(loaders[0].stops, 0); assert.equal(refreshes.length, 0);
+  assert.throws(() => runtime.applyEmotes({ sevenTv: true }, 'https://www.twitch.tv/embed/other/chat'), /does not match/);
+  page.frames[0].url = 'http://127.0.0.1:3210/unrelated';
+  await assert.rejects(runtime.applyEmotes({ sevenTv: true }, expectedUrl), /Selected overlay changed/);
+  assert.equal(refreshes.length, 0);
+});

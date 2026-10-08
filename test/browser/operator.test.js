@@ -142,3 +142,139 @@ test('managed OBS overlay applies live controls to native frames and replaces on
     await writeFile(join(output, 'operator-managed-overlay.json'), JSON.stringify({ kind: 'synthetic-operator-integration', status: 'passed', browser: context.browser().version(), checks: ['UI-to-native-CDP', 'live-gap', 'stable-message-identities', 'spacer-arrival-resize-remove', 'transparent-spacer-pixels', 'native-descendants', 'source-switch-with-stable-OBS-URL', 'disconnect-restoration'], initialLayout: initial.layout, finalLayout: final.layout, cleanup: operator.health().cleanup, limitations: ['Intercepted synthetic native documents; no new live special-root or prolonged OBS claim.'] }, null, 2));
   } finally { await operator.close(); await context?.close(); await rm(profile, { recursive: true, force: true }); }
 });
+
+test('emote preferences are keyboard accessible, survive polling/reload, and fit narrow controls', { timeout: 30000 }, async t => {
+  const { operator, base, statePath } = await host(t, {
+    createRuntime: config => { const runtime = new NativeCoordinator(config, { openPage: async () => { throw new Error('Synthetic OBS offline.'); } }); runtime.applyEmotes = async () => ({ accepted: true }); return runtime; },
+  });
+  await operator.configure({ channel: 'fixture', videoId: 'abcdefghijk' });
+  const browser = await chromium.launch({ channel: 'chromium', headless: true }); t.after(() => browser.close());
+  const page = await browser.newPage({ viewport: { width: 375, height: 1000 } });
+  await page.goto(base);
+  const seven = page.getByRole('checkbox', { name: '7TV', exact: true });
+  const bttv = page.getByRole('checkbox', { name: 'BTTV', exact: true });
+  await seven.waitFor(); await page.waitForFunction(() => !document.getElementById('seven-tv').disabled);
+  assert.equal(await seven.isChecked(), false); assert.equal(await bttv.isChecked(), false);
+  await seven.focus(); await page.keyboard.press('Space');
+  await page.waitForTimeout(1200);
+  assert.equal(await seven.isChecked(), true, 'Polling must preserve an unsaved keyboard choice.');
+  await page.getByRole('button', { name: 'Apply emotes', exact: true }).focus(); await page.keyboard.press('Enter');
+  await complete(page, 'Emote choices saved');
+  assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')).config.emotes, { sevenTv: true, betterTtv: false });
+  await bttv.focus(); await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Apply emotes', exact: true }).click(); await complete(page, 'Emote choices saved');
+  await page.reload(); await page.waitForFunction(() => document.getElementById('better-ttv').checked);
+  assert.equal(await seven.isChecked(), true); assert.equal(await bttv.isChecked(), true);
+  assert.equal(await page.getByRole('button', { name: 'Retry emotes', exact: true }).isVisible(), false);
+  await page.getByText('Applying changes or retrying refreshes Twitch and resets its chat history.', { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  const output = resolve('.runtime/proof'); await mkdir(output, { recursive: true });
+  await page.screenshot({ path: join(output, 'operator-emotes-narrow.png'), fullPage: true });
+});
+
+for (const sameProcess of [false, true]) test(`managed emote controls preserve native YouTube/spacers and retry once through ${sameProcess ? 'page contexts' : 'OOPIFs'}`, { timeout: 90000 }, async t => {
+  const { TwitchEnhancement } = await import('../../apps/coordinator/src/twitch-enhancement.js');
+  const { ffzBootstrapUrl } = await import('../../packages/adapters/twitch/ffz-bootstrap.js');
+  const { createHash } = await import('node:crypto');
+  const shim = await readFile(new URL('../fixtures/twitch/ffz-proof-shim.js', import.meta.url), 'utf8');
+  const integrity = `sha256-${createHash('sha256').update(shim).digest('base64')}`;
+  let downloadFailed = false; let downloads = 0;
+  const { operator, base } = await host(t, { createRuntime: config => new NativeCoordinator(config, {
+    createEnhancement: (choices, owner) => new TwitchEnhancement(choices, owner, {
+      download: async () => { downloads += 1; if (downloadFailed) throw new Error('Synthetic download offline'); return { integrity }; }, pollMs: 20, retryMs: 1,
+    }),
+  }) });
+  const profile = await mkdtemp(join(tmpdir(), 'elmychat-emote-controls-'));
+  let browser;
+  try {
+    browser = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, viewport: { width: 420, height: 600 },
+      args: ['--remote-debugging-port=0', '--no-proxy-server', ...(sameProcess ? ['--disable-site-isolation-trials', '--disable-features=IsolateOrigins,site-per-process'] : ['--site-per-process'])] });
+    const fixtures = await Promise.all(['twitch', 'youtube'].map(platform => readFile(new URL(`../fixtures/${platform}/source.html`, import.meta.url), 'utf8')));
+    await browser.route('https://www.twitch.tv/**', route => route.fulfill({ contentType: 'text/html', body: fixtures[0] }));
+    await browser.route('https://www.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: fixtures[1] }));
+    let bootstrapLoads = 0; let twitchLoads = 0;
+    browser.on('request', request => { if (request.isNavigationRequest() && request.url().startsWith('https://www.twitch.tv/embed/')) twitchLoads += 1; });
+    await browser.route(ffzBootstrapUrl, route => { bootstrapLoads += 1; return route.fulfill({ contentType: 'text/javascript', headers: { 'access-control-allow-origin': '*' }, body: shim }); });
+    const overlay = browser.pages()[0]; await overlay.goto(`${base}/overlay`);
+    const controls = await browser.newPage(); await controls.goto(base);
+    const port = Number((await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).split('\n')[0]);
+    await controls.getByLabel('Twitch channel').fill('fixture');
+    await controls.getByLabel('YouTube video ID or URL').fill('abcdefghijk');
+    await controls.getByText('OBS connection settings', { exact: true }).click();
+    await controls.getByLabel('OBS debugging port').fill(String(port));
+    await controls.getByRole('button', { name: 'Save and connect' }).click(); await complete(controls, 'Sources saved');
+    async function until(predicate) {
+      const deadline = Date.now() + 15000;
+      while (Date.now() < deadline) { await operator.tick(); await overlay.bringToFront(); await waitForPaint(overlay); if (await predicate(operator.health())) return; }
+      assert.fail(`Emote controls did not converge: ${JSON.stringify(operator.health())}`);
+    }
+    await until(health => health.chatConnected && health.layout.placements.length === 8);
+    const youtubeSession = operator.health().sources[1].sessionId;
+    const youtubeIdentities = operator.health().layout.placements.filter(entry => entry.sourceId === 'youtube').map(entry => [entry.messageId, entry.sequence]);
+    const youtubeFrame = overlay.frames().find(frame => frame.url().includes('youtube.com/live_chat'));
+    const youtubeToken = await youtubeFrame.evaluate(() => globalThis.documentToken = Math.random());
+    await operator.spacing({ type: 'gap', height: 16.5 });
+    await operator.spacing({ type: 'spacer-add', height: 60 });
+    const spacer = operator.state().spacers[0];
+    // A second same-URL overlay must never receive the selected source's refresh.
+    const other = await browser.newPage(); await other.goto(`${base}/overlay`);
+    await other.frameLocator('#twitch').locator('[data-id="native-a"]').waitFor();
+    const otherFrame = other.frames().find(frame => frame.url().includes('twitch.tv/embed'));
+    const otherToken = await otherFrame.evaluate(() => globalThis.documentToken = Math.random());
+    async function choices(sevenTv, betterTtv) {
+      await controls.getByRole('checkbox', { name: '7TV', exact: true }).setChecked(sevenTv);
+      await controls.getByRole('checkbox', { name: 'BTTV', exact: true }).setChecked(betterTtv);
+      await controls.getByRole('button', { name: 'Apply emotes', exact: true }).click(); await complete(controls, 'Emote choices saved');
+    }
+    async function preserved() {
+      assert.equal(operator.health().sources[1].sessionId, youtubeSession);
+      assert.deepEqual(operator.health().layout.placements.filter(entry => entry.sourceId === 'youtube').map(entry => [entry.messageId, entry.sequence]), youtubeIdentities);
+      assert.equal(await youtubeFrame.evaluate(() => globalThis.documentToken), youtubeToken);
+      assert.equal(await otherFrame.evaluate(() => globalThis.documentToken), otherToken);
+      assert.deepEqual(operator.state().spacers, [spacer]); assert.equal(operator.state().gap, 16.5);
+    }
+    await choices(true, false);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready' && !health.sources[0].enhancement.activeWork);
+    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').waitFor();
+    assert.equal(await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').count(), 0);
+    await preserved();
+    await operator.tick(); await waitForPaint(overlay);
+    const spacerRect = operator.health().layout.spacers[0].rect;
+    const pixels = PNG.sync.read(await overlay.screenshot({ omitBackground: true }));
+    for (let y = Math.max(0, Math.ceil(spacerRect.y)); y < Math.min(pixels.height, Math.floor(spacerRect.y + spacerRect.height)); y += 1) for (let x = 0; x < pixels.width; x += 1) assert.equal(pixels.data[(y * pixels.width + x) * 4 + 3], 0, 'Emote apply must preserve transparent spacer pixels.');
+    const refresh = operator.health().sources[0].refresh;
+    const count = twitchLoads;
+    // Duplicate delivery and normal polling cannot repeat or undo a refresh.
+    await overlay.evaluate(({ revision, overlayUrl, expectedUrl }) => __elmychatManagedOverlayV1.twitch({ operation: 'refresh', revision, overlayUrl, expectedUrl }),
+      { revision: refresh.revision, overlayUrl: `${base}/overlay`, expectedUrl: operator.overlay('127.0.0.1').sources[0].url });
+    await overlay.waitForTimeout(2200); await operator.tick();
+    assert.equal(twitchLoads, count);
+    await choices(true, true);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').waitFor(); await preserved();
+    await choices(false, true);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    assert.equal(await overlay.frameLocator('#twitch').locator('img[data-set="fixture-7tv-emotes"]').count(), 0); await preserved();
+    downloadFailed = true;
+    await choices(true, true);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'unavailable');
+    await controls.getByRole('button', { name: 'Retry emotes', exact: true }).waitFor({ state: 'visible' });
+    assert.equal(operator.health().chatConnected, true); await preserved();
+    const attempts = downloads; const failedLoads = bootstrapLoads;
+    for (let i = 0; i < 10; i += 1) await operator.tick();
+    assert.equal(downloads, attempts);
+    downloadFailed = false;
+    await controls.getByRole('button', { name: 'Retry emotes', exact: true }).click(); await complete(controls, 'Emote choices saved');
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    assert.equal(bootstrapLoads, failedLoads + 1); await preserved();
+    // A direct Twitch refresh reapplies saved choices without touching YouTube.
+    const beforeSession = operator.health().sources[0].sessionId;
+    await overlay.frames().find(frame => frame.url().includes('twitch.tv/embed')).evaluate(() => location.reload());
+    await until(health => health.sources[0].sessionId !== beforeSession && health.sources[0].enhancement.status === 'ready'); await preserved();
+    await choices(false, false);
+    await until(health => health.chatConnected && health.sources[0].enhancement.status === 'off');
+    assert.equal(await overlay.frameLocator('#twitch').locator('img[data-provider="ffz"]').count(), 0); await preserved();
+    const output = resolve('.runtime/proof'); await mkdir(output, { recursive: true });
+    await writeFile(join(output, `operator-emotes-${sameProcess ? 'page' : 'oopif'}.json`), JSON.stringify({ kind: 'synthetic-emote-controls', status: 'passed', checks: ['independent-and-both-providers', 'acknowledged-idempotent-refresh', 'unchanged-YouTube-identities', 'retained-gap-and-spacer', 'selected-overlay-only', 'bounded-explicit-retry', 'saved-choices-after-refresh', 'disable-with-clean-refresh'], limitations: ['Deterministic enhancer shim, not additional live provider/category evidence.'] }, null, 2));
+  } finally { await operator.close(); await browser?.close(); await rm(profile, { recursive: true, force: true }); }
+});

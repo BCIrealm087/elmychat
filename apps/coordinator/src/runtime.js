@@ -77,6 +77,8 @@ export class NativeCoordinator {
   #controls = [];
   #activity = { connections: 0, sessionsStarted: 0, reportsProcessed: 0, layoutWrites: 0, lastCycleMs: 0, longestCycleMs: 0 };
   #enhancement;
+  #createEnhancement;
+  #refresh;
 
   constructor(config, { openPage = NativePage.open, clock = () => performance.now(),
     createEnhancement = (emotes, owner) => new TwitchEnhancement(emotes, owner) } = {}) {
@@ -84,12 +86,13 @@ export class NativeCoordinator {
     this.compositor = new Compositor({ viewport: { width: 0, height: 0 }, gap: this.config.gap, maxEntries: this.config.maxEntries, maxSources: 2 });
     this.#open = openPage;
     this.#clock = clock;
+    this.#createEnhancement = createEnhancement;
     this.#enhancement = createEnhancement(this.config.sources.find(source => source.platform === 'twitch').emotes, this.#owner);
   }
 
   diagnostics() {
     const sources = this.config.sources.map(({ id, platform }) => ({ id, platform, ...this.#sourceStates.get(id),
-      ...(platform === 'twitch' ? { enhancement: this.#enhancement.diagnostics() } : {}) }));
+      ...(platform === 'twitch' ? { enhancement: this.#enhancement.diagnostics(), refresh: this.#refresh ? { revision: this.#refresh.revision, status: this.#refresh.status, reason: this.#refresh.reason } : null } : {}) }));
     return {
       status: this.#stopping ? 'stopped' : this.#lastError ? 'waiting' : this.#page ? 'connected' : 'waiting',
       targetId: this.#pinnedId ?? null, cycles: this.#cycles, lastError: this.#lastError,
@@ -116,6 +119,19 @@ export class NativeCoordinator {
 
   control(input) {
     const command = validateSpacingCommand(input);
+    return this.#enqueue(command);
+  }
+
+  applyEmotes(input, expectedUrl, retry = false) {
+    const emotes = validateEmoteOptions(input);
+    const source = this.config.sources.find(source => source.platform === 'twitch');
+    // Validate the new choices against the same embed restriction as startup.
+    validateRuntimeConfig({ ...this.config, sources: this.config.sources.map(item => item === source ? { ...item, emotes } : item) });
+    if (typeof expectedUrl !== 'string' || !matches(expectedUrl, source.urlPrefix)) throw new TypeError('Twitch refresh URL does not match the configured source.');
+    return this.#enqueue({ type: 'emotes', emotes, expectedUrl, retry });
+  }
+
+  #enqueue(command) {
     if (this.#stopping) return Promise.reject(new Error('Coordinator is stopped.'));
     if (this.#controls.length >= 32) return Promise.reject(new Error('Too many pending spacing commands.'));
     return new Promise((resolve, reject) => {
@@ -124,7 +140,8 @@ export class NativeCoordinator {
     });
   }
 
-  #applyControl(command) {
+  async #applyControl(command) {
+    if (command.type === 'emotes') return this.#applyEmotes(command);
     if (command.type === 'gap') {
       this.compositor.setGap(command.height);
       this.config.gap = command.height;
@@ -137,6 +154,39 @@ export class NativeCoordinator {
     }
     if (!spacers.some((entry) => entry.spacerId === command.spacerId)) throw new Error('Spacer is no longer retained.');
     return command.type === 'spacer-remove' ? this.compositor.removeSpacer(command.spacerId) : this.compositor.setSpacer({ spacerId: command.spacerId, height: command.height });
+  }
+
+  async #applyEmotes(command) {
+    const source = this.config.sources.find(source => source.platform === 'twitch');
+    if (!command.retry && JSON.stringify(source.emotes) === JSON.stringify(command.emotes)) return { accepted: true, removed: [] };
+    if (!this.#page || this.#page.disconnected) throw new Error('Wait for the selected OBS overlay to connect before applying emotes.');
+    const frames = await this.#page.describe();
+    const tops = frames.filter(frame => frame.topLevel);
+    if (this.#stopping || tops.length !== 1 || tops[0].url !== this.#targetUrl) throw new Error('Selected overlay changed before applying emotes.');
+    const fields = { overlayUrl: this.#targetUrl, expectedUrl: command.expectedUrl };
+    const call = (operation, revision) => this.#page.frames.evaluate(tops[0].context,
+      `(() => { if (location.href !== ${JSON.stringify(this.#targetUrl)}) throw new Error('Selected overlay changed.'); const api = globalThis.__elmychatManagedOverlayV1; if (!api) throw new Error('Reload the managed Elmychat overlay before applying emotes.'); return api.twitch(${JSON.stringify({ ...fields, operation, revision })}); })()`);
+    // Preflight failures leave the live loader and native sessions untouched.
+    const available = await call('inspect');
+    if (!available?.available || this.#stopping || this.#page.disconnected) throw new Error('Managed Twitch refresh is unavailable.');
+    const oldContext = frames.find(frame => sourceMatches(frame, source))?.context;
+    await this.#enhancement.stop();
+    await this.#retire(source.id, 'emote-settings-refresh');
+    this.#blocked.delete(source.id);
+    source.emotes = command.emotes;
+    this.#enhancement = this.#createEnhancement(source.emotes, this.#owner);
+    const revision = randomUUID();
+    this.#refresh = { revision, oldContext, status: 'requested', reason: null, deadline: this.#clock() + 15000 };
+    // After committing the transition, response loss is recorded, never retried
+    // automatically. The fresh native context is the reconnection evidence.
+    try {
+      const result = await call('refresh', revision);
+      if (!result?.acknowledged || result.revision !== revision) throw new Error('Twitch refresh was not acknowledged.');
+    } catch (error) {
+      this.#refresh.status = 'unconfirmed';
+      this.#refresh.reason = `Twitch refresh could not be confirmed: ${String(error.message).slice(0,180)}`;
+    }
+    return { accepted: true, removed: [] };
   }
 
   #collectRetirements(result, retired) {
@@ -187,7 +237,7 @@ export class NativeCoordinator {
     const replies = [];
     for (const control of this.#controls.splice(0)) {
       try {
-        const result = this.#applyControl(control.command);
+        const result = await this.#applyControl(control.command);
         this.#collectRetirements(result, retired);
         replies.push({ resolve: control.resolve, result });
       } catch (error) { control.reject(error); }
@@ -213,6 +263,23 @@ export class NativeCoordinator {
       for (const source of this.config.sources) {
         if (this.#stopping || this.#page.disconnected) throw new Error('Coordinator stopped or transport disconnected.');
         const candidates = frames.filter((frame) => sourceMatches(frame, source));
+        if (source.platform === 'twitch' && this.#refresh && this.#refresh.status !== 'ready') {
+          if (candidates.length !== 1 || candidates[0].context === this.#refresh.oldContext || candidates[0].documentReady === false) {
+            if (this.#clock() >= this.#refresh.deadline) {
+              this.#refresh.status = 'unavailable';
+              this.#refresh.reason ??= 'Twitch did not reconnect after the refresh; retry explicitly.';
+            }
+            if (this.#refresh.status !== 'unavailable' || candidates.length !== 1 || candidates[0].documentReady === false) {
+              this.#sourceStates.set(source.id, { status: 'waiting', reason: 'emote-settings-refresh' });
+              continue;
+            }
+            // Resume native composition if a refresh was refused/lost. Never
+            // install the newly chosen enhancer into the unrefreshed document.
+          } else {
+            this.#refresh.status = 'ready'; this.#refresh.reason = null;
+            this.#refresh.oldContext = undefined;
+          }
+        }
         let record = this.#records.get(source.id);
         if (candidates.length !== 1 || (record && candidates[0].context !== record.context)) {
           await this.#retire(source.id, candidates.length > 1 ? 'ambiguous-source-frame' : 'frame-replaced-or-missing');
@@ -267,7 +334,7 @@ export class NativeCoordinator {
             trackedRoots: batch.diagnostics?.trackedRoots ?? null,
             adapter: batch.diagnostics ? Object.fromEntries(['trackedRoots', 'retiredRoots', 'pendingReports', 'styledNodes', 'added', 'removed', 'resized', 'styleRepairs', 'flushes', 'rendererIdentifiedRoots', 'identityTransfers'].map((key) => [key, batch.diagnostics[key] ?? null])) : null,
           });
-          if (source.platform === 'twitch') this.#enhancement.sync(this.#page, record, candidates[0].url);
+          if (source.platform === 'twitch' && (!this.#refresh || this.#refresh.status === 'ready')) this.#enhancement.sync(this.#page, record, candidates[0].url);
         } catch (error) {
           this.#blocked.set(source.id, { context, reason: error.message });
           await this.#retire(source.id, error.message, true, true);
