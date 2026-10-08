@@ -20,3 +20,5 @@ Step 1 may contain a tiny disposable vertical slice; it should not grow into the
 Keep arbitrary spacing in the layout contract from the beginning. Defer additional platforms, platform-send-time synchronization, Elmybot integration, custom rendering, account workflows, and installer work until a requirement and evidence justify them.
 
 The initial implementation milestone is complete. Further work belongs to a separately scoped roadmap and working branch. This completion does not imply a packaged release, redistribution license, or prolonged live-platform support guarantee.
+
+The next priority on `codex-improvements` is [native 7TV/BTTV support](emote-support-roadmap.md), after preserving native rendering. Its planned steps 8–13 investigate in-frame enhancement through existing CDP, then lifecycle, layout compatibility, controls and verification. The initial milestone remains complete; emote enhancement is not implemented yet.

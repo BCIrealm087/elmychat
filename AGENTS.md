@@ -11,6 +11,7 @@
 ## Product direction
 
 - Preserve native Twitch and YouTube message rendering. Keep each message inside the document that owns it.
+- After native rendering, 7TV/BTTV support is the current product priority. Follow `docs/emote-support-roadmap.md` (steps 8–13). Investigate one in-frame enhancement engine through existing CDP first; do not introduce an Elmychat message renderer. This roadmap is planned, not implemented or live-verified.
 - Keep platform selectors and DOM manipulation in the corresponding adapter. Keep the compositor independent of platform HTML.
 - Support native message measurements, a unified arrival order, and arbitrary transparent spacers.
 - Treat user experience as part of each improvement: keep additions compact, recognizable, readable over transparent OBS scenes, and consistent with native content. Keep implementation details out of operator-facing flows.

@@ -1,0 +1,57 @@
+# Native chat emote support roadmap
+
+Status: planned, not implemented. Working branch: `codex-improvements`. Research checked 2026-10-08 UTC.
+
+## Priority and scope
+
+Preserving native chat rendering remains the first requirement. Enabling 7TV and BTTV is the next product priority. Begin with Twitch in the existing OBS/CDP workflow; retain YouTube's native rendering. Browser extensions, a dedicated OBS plugin, other platforms and a custom chat renderer are outside this milestone.
+
+Here, native rendering means Twitch still owns message creation, message hosts, document membership, removal, badges and its underlying chat UI. An opt-in enhancement may add emote images within those messages, as it does in an enhanced Twitch browser session. Elmychat must not replace the message renderer, clone messages, move them into our document or recreate emotes from received chat text. Enhanced output cannot be described as pixel-identical to unmodified Twitch.
+
+## Recommended route
+
+Use the existing CDP connection to load one enhancement engine inside the selected Twitch frame. Investigate FrankerFaceZ (FFZ) first, with its `7tv-emotes` and `ffzap-bttv` add-ons. Let FFZ resolve emote names, provider precedence, channel/global sets, animation and overlay emotes. Let Elmychat observe the resulting native boxes and position them. Do not load the standalone FFZ, BTTV and 7TV suites together: overlapping renderer hooks, emote matching and styles can compete.
+
+This is a supported-source candidate, not a verified integration. OBS's Twitch dock injects FFZ's public script through a startup script. FFZ's Twitch module explicitly recognizes the `embed-chat` route. Its current add-on manifests describe 7TV channel/global/personal emotes and BTTV global/channel emotes; the BTTV add-on requires `ffzap-core`. Source inspection establishes a plausible route, not operation in our exact Twitch embed or OBS build.
+
+Apply preferences to the selected document without persisting them into shared Twitch-origin FFZ storage where feasible. FFZ's current add-on operations accept a non-saving mode, but dependency operations and appearance settings need their own audit. Elmychat's JSON remains the authority for this overlay. Detect existing enhancement instances before loading another; do not overwrite unrelated profiles or take ownership of another instance. If isolated configuration is not feasible, make that a compatibility blocker rather than silently affecting other Twitch tabs or OBS docks.
+
+Keep the integration in a Twitch-specific enhancement module, separate from the compositor and shared native runtime. Browser control supplies scoped evaluation; the coordinator owns enhancement lifecycle and settings for the selected source generation. Use a versioned compatibility wrapper around upstream APIs, checking capabilities before invoking them. FFZ's add-on manager exposes enable/disable operations, but completion must be checked separately: requesting enablement is not evidence of loaded add-ons or rendered emotes.
+
+## Operator experience
+
+Add a compact **Twitch emotes** group with independent **7TV** and **BTTV** checkboxes, initially off for existing settings. Both can be enabled together through the same engine. Save preferences locally; no additional Chrome extension, browser-debugging flag or provider login is required for public channel/global emotes beyond our existing OBS setup. Keep internal loader names and URLs in diagnostics, not ordinary controls. Cosmetic paints, badges and other FFZ appearance features are not part of the first emote-only controls.
+
+Show a separate enhancement status: off, loading, ready, or unavailable. Native chat connection status must remain separate. A loading failure should leave native chat usable and show a short explanation with a bounded retry action. Readiness checks distinguish an installed engine, loaded provider add-ons, and available channel data; an empty emote set is valid. A channel name is not automatically a 7TV user ID, and automatic mapping must be verified through the enhancement engine.
+
+Do not promise instantaneous, reversible removal of a running enhancement. Removing its script tag does not undo hooks, styles, sockets or storage changes. Prefer a source-only restart when changing provider choices or recovering partial initialization. The managed overlay may reload its own Twitch iframe; preserve the coordinator, YouTube session, gap and spacers. Explain beside the controls that applying emote changes may refresh Twitch chat and reset its retained history. Use a per-source refresh revision with acknowledgment so ordinary overlay polling cannot cause repeated reloads. General source saving currently stops the entire coordinator; emote changes need a dedicated path instead.
+
+## Implementation sequence
+
+These steps continue the completed initial roadmap's numbering. Each step uses automatic development cycles and commits its evidence and limitations.
+
+| Step | Work | Acceptance |
+| --- | --- | --- |
+| **8. Prove native enhancement compatibility** | Build a scoped diagnostic using FFZ and one provider at a time, then both, in the exact Twitch embed we already use. Record bootstrap URL, upstream version, required add-ons, settings APIs, actual native root/key behavior, CSP/Trusted Types behavior and supported emote categories. | Automated cross-origin fixtures verify injection routing and geometry. Actual Twitch evidence confirms images render in retained native hosts, ordinary text/badges still work, and root ownership is preserved. If FFZ is incompatible, evaluate standalone BTTV for BTTV support or the official 7TV bootstrap separately; choose one engine or mutually exclusive modes based on evidence. Do not fall back to an Elmychat message renderer. |
+| **9. Add a bounded enhancement lifecycle** | Implement the selected Twitch loader with per-document idempotence, capability/readiness checks, generation ownership, bounded retries/timeouts and separate status. Attach the native adapter promptly; load enhancement asynchronously without blocking YouTube or coordinator cycles. | Tests cover delayed success, empty sets, failed scripts, missing APIs, partial initialization, repeated ticks, old callbacks after navigation, source changes and reconnect. One active install attempt per generation, no retry storm or duplicate hooks; ordinary native chat keeps working or a partial installation gets a controlled source-only reset. |
+| **10. Preserve identity and layout under enhanced content** | Integrate measured changes from late image loads, emote replacement and upstream rerenders. Prefer verified native keys; investigate how to distinguish an enhancement update from genuinely reused unkeyed content. Keep root positioning, clipping and wrapping owned by Elmychat, with content rendering owned by Twitch plus the chosen enhancer. | Behavioral tests cover static/animated/wide emotes, supported stacked or zero-width emotes, resize/shrink, rapid arrivals, removal/reuse, delayed assets and conflicting style writes. Enhancement-only changes preserve sequence when identity can be established. No blanket suppression of content mutations; gaps remain transparent, icons stay separate, and the supplied E ASCII-art regression passes. Mark unsupported categories explicitly. |
+| **11. Add preferences and usable controls** | Persist validated provider choices with backward-compatible defaults; carry them through explicit JSON and managed settings. Add accessible checkboxes/status and a dedicated source-only apply/retry path. | Node and browser tests exercise old settings migration, independent/both-provider choices, persistence failure rollback, keyboard use, narrow screens, restart notices, one acknowledged Twitch refresh, preserved YouTube identity and retained spacers. Saved choices reapply after source refresh. |
+| **12. Harden compatibility and teardown** | Bound diagnostic records and pending work; isolate channel changes and competing enhancers; document upstream loading, updates, licenses and ownership. Change only necessary FFZ settings and record prior values, avoiding arbitrary imported profiles. Audit root, ancestor, font, line-height and margin conflicts. | Real-CDP synthetic load/recovery tests preserve adapter/report bounds and idle behavior. Stop restores Elmychat-owned styles and cancels its work. Provider unload is claimed only when verified; a source reload is the clean reset boundary when upstream hooks cannot be reliably removed. Do not reload OBS or unrelated tabs. |
+| **13. Complete the emote-support milestone** | Run Windows/Linux regression CI and finish operator/support documentation. Consolidate the bounded live compatibility evidence from step 8 and any material changes to its bootstrap into the final support matrix. | Public channel/global 7TV and BTTV rendering is verified for the chosen route, with provider failures isolated and native roots/order/spacing preserved. Animated, overlay/stacked, personal emotes and cosmetics are claimed only where evidence supports them. A loader success flag alone never completes this step. |
+
+## Critical verification boundary
+
+Synthetic fixtures prove our lifecycle, transport and layout contracts; they cannot establish that an upstream enhancer can hook the current live Twitch embed or render inside the operator's OBS/CEF build. Prepare the complete diagnostic and automatic checks before handing over one bounded live check for that architectural uncertainty. The operator handles live testing; routine later steps do not require repeated manual gates. If real platform access is unavailable during development, keep step 8's live evidence pending and progress independent automated work without claiming compatibility.
+
+Use the existing pixel/gap, ASCII-art, platform-mark and paint-stability suites throughout. Add fixtures that simulate supported enhancement mutations rather than downloading mutable upstream scripts in every CI run. Keep a separate opt-in actual-loader diagnostic and record the versions/hashes tested. Remote bootstrap and dependent chunks may update independently; a bootstrap hash alone does not pin the full engine. Decide reproducible distribution and licensing before copying or bundling third-party code. Do not disable browser web security or weaken platform CSP as a workaround.
+
+No provider scripts, emote assets or runtime behavior are added by this planning change.
+
+## Research sources
+
+- [OBS Twitch dock bootstrap](https://github.com/obsproject/obs-studio/blob/master/frontend/oauth/TwitchAuth.cpp): `ffz_script`, `bttv_script`, `AddonChoice`, `setStartupScript`.
+- [FFZ Twitch site support](https://github.com/FrankerFaceZ/FrankerFaceZ/blob/master/src/sites/twitch-twilight/index.js): embedded-chat route recognition.
+- [FFZ add-on manager](https://github.com/FrankerFaceZ/FrankerFaceZ/blob/master/src/addons.ts): enable/disable operations, saved enabled list and reload-required behavior.
+- [7TV manifest](https://github.com/FrankerFaceZ/Add-Ons/blob/master/src/7tv-emotes/manifest.json): version 1.4.34 at research time; channel/global/personal emotes and cosmetics.
+- [BTTV manifest](https://github.com/FrankerFaceZ/Add-Ons/blob/master/src/ffzap-bttv/manifest.json): version 3.3.24 at research time, `ffzap-core` dependency; [implementation](https://github.com/FrankerFaceZ/Add-Ons/blob/master/src/ffzap-bttv/index.js).
+- [FFZ add-on repository](https://github.com/FrankerFaceZ/Add-Ons): development, publishing and upstream integration guidance.

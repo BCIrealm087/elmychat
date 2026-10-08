@@ -59,3 +59,5 @@ Read [architecture](docs/architecture.md), [roadmap](docs/roadmap.md), and [deve
 Windows and OBS are the initial operator target; keep the development tooling portable. Elmychat is a separate project from Elmybot and requires no bot integration to begin. The local settings UI is implemented. This milestone retains the Node/source-checkout workflow; installers, packaged releases, OAuth and additional platforms require separately selected future scope.
 
 No redistribution license has been selected yet.
+
+The next planned priority after native rendering is [optional 7TV/BTTV support](docs/emote-support-roadmap.md). That roadmap is not implemented; there is currently no emote-provider toggle.
