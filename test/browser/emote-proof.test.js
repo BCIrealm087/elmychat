@@ -112,6 +112,8 @@ test('emote diagnostic distinguishes readiness, rejects unknown dependencies and
     await call({operation:'stop'});
     await fresh('<meta http-equiv="Content-Security-Policy" content="require-trusted-types-for \'script\'">');
     const tt=await begin();assert.equal(tt.status,'blocked');assert.match(tt.reason,/Bootstrap rejected/);await call({operation:'stop'});
+    assert.equal(await page.evaluate(()=>globalThis.__elmychatEmoteProofV1),undefined);
+    const retry=await begin();assert.equal(retry.status,'blocked');assert.match(retry.reason,/Bootstrap rejected/);await call({operation:'stop'});
     await fresh();await page.evaluate(()=>{const script=document.createElement('script');script.src='https://cdn.frankerfacez.com/other.js';document.head.append(script);});
     await assert.rejects(begin(),/Existing enhancement/);
   }finally{await browser.close();}

@@ -14,7 +14,11 @@ function nativeEmoteProof(command, bootstrapUrl, key) {
     return command.operation === 'stop' ? previous.stop() : previous.poll();
   }
   if (previous || globalThis.FrankerFaceZ || globalThis.ffz || globalThis.BetterTTV || globalThis.SevenTV ||
-      [...document.scripts].some(script => /frankerfacez|betterttv|7tv/i.test(script.src))) {
+      [...document.scripts].some(script => {
+        if (!script.src) return false;
+        const host = new URL(script.src,location.href).hostname;
+        return ['frankerfacez.com','betterttv.net','betterttv.com','7tv.app','7tv.io'].some(domain => host===domain || host.endsWith(`.${domain}`));
+      })) {
     throw new Error('Existing enhancement or proof detected. Refresh only this Twitch source before testing.');
   }
   if (location.href !== command.documentUrl || !document.body) throw new Error('Selected Twitch document changed or is not ready.');
@@ -43,7 +47,8 @@ function nativeEmoteProof(command, bootstrapUrl, key) {
     if (active) {
       active = false; clearTimeout(expiry); document.removeEventListener('securitypolicyviolation', security);
       loader.onload = loader.onerror = null; loader.remove(); baseline.length = 0;
-      globalThis[key] = { token: command.token, stopped: true, resetRequired };
+      if (resetRequired) globalThis[key] = { token: command.token, stopped: true, resetRequired };
+      else delete globalThis[key];
     }
     // Keep a tiny tombstone: removing a script does not undo upstream hooks.
     return { stopped: true, enhancerResetRequired: resetRequired, reset: 'Refresh only the managed Twitch iframe before the next mode.' };
