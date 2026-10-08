@@ -88,6 +88,8 @@ test('in-document loader failures and missing APIs preserve native chat and prot
 for (const sameProcess of [false, true]) for (const partial of [false, true, 'native-failure']) test(`enhancement lifecycle ${partial === 'native-failure' ? 'recovers a native adapter failure once' : partial ? 'recovers partial initialization once' : 'adopts hooks after reconnect'} through ${sameProcess ? 'page contexts' : 'OOPIFs'}`, { timeout: 60000 }, async () => {
   const fixtures = await startCoordinatorFixtures(); const profile = await mkdtemp(join(tmpdir(), 'elmychat-lifecycle-'));
   let browser; let runtime;
+  let releaseBootstrap;
+  const bootstrapGate = new Promise(resolve => { releaseBootstrap = resolve; });
   try {
     browser = await chromium.launchPersistentContext(profile, { channel: 'chromium', headless: true, viewport: { width: 420, height: 600 },
       args: ['--remote-debugging-port=0', '--no-proxy-server', ...(sameProcess ? ['--disable-site-isolation-trials', '--disable-features=IsolateOrigins,site-per-process'] : ['--site-per-process']),
@@ -106,17 +108,21 @@ for (const sameProcess of [false, true]) for (const partial of [false, true, 'na
       sources: [{ ...fixtures.sources[0], urlPrefix: twitchUrl, emotes: { sevenTv: true, betterTtv: true } }, fixtures.sources[1]], gap: 12 };
     let transport;
     runtime = new NativeCoordinator(settings, { openPage: async (...args) => { transport = await NativePage.open(...args); return transport; },
-      createEnhancement: (choices, owner) => new TwitchEnhancement(choices, owner, { download: async () => ({ integrity: hash(code) }), pollMs: 20 }) });
+      createEnhancement: (choices, owner) => new TwitchEnhancement(choices, owner, { download: async () => { await bootstrapGate; return { integrity: hash(code) }; }, pollMs: 20 }) });
     async function until(predicate) {
       const end = Date.now() + 15000;
       while (Date.now() < end) { await runtime.step(); await waitForPaint(page, 2); if (predicate()) return; }
       assert.fail(JSON.stringify(runtime.diagnostics().sources));
     }
     await until(() => runtime.diagnostics().chatConnected && runtime.diagnostics().layout.placements.length === 8);
+    // Inspect the initial transport before a deliberate partial failure can
+    // refresh its frame; native composition must work during the pending load.
     const document = (await transport.describe()).find(frame => frame.url === twitchUrl);
+    assert.ok(document, 'The connected initial Twitch document must be discoverable before bootstrap release.');
     assert.equal(!!document.context.sessionId, !sameProcess);
     const youtubeSession = runtime.diagnostics().sources[1].sessionId;
     await runtime.control({ type: 'spacer-add', height: 25 });
+    releaseBootstrap();
     if (partial === 'native-failure') {
       await until(() => runtime.diagnostics().sources[0].enhancement.status === 'ready' && !runtime.diagnostics().sources[0].enhancement.activeWork);
       const twitch = page.frames().find(frame => frame.url() === twitchUrl);
@@ -149,5 +155,5 @@ for (const sameProcess of [false, true]) for (const partial of [false, true, 'na
       assert.equal(loads, 2); assert.equal(runtime.diagnostics().sources[1].sessionId, reconnectedYoutube);
     }
     assert.equal(await page.frameLocator('#youtube').locator('img[data-provider="ffz"]').count(), 0);
-  } finally { await runtime?.stop(); await browser?.close(); await fixtures.close(); await rm(profile, { recursive: true, force: true }); }
+  } finally { releaseBootstrap(); await runtime?.stop(); await browser?.close(); await fixtures.close(); await rm(profile, { recursive: true, force: true }); }
 });

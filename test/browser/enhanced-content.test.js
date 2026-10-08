@@ -141,6 +141,15 @@ test('static, animated, wide and zero-width content keeps identity, sizing, clip
   assert.ok(loaded[0].height > oldSlot.height + 100); admit(loaded); await place();
   assert.equal(core.entries()[0].sequence, 1);
   assert.equal(await page.evaluate(() => zeroEmote.getBoundingClientRect().width), 0);
+  const overlay = await page.evaluate(() => {
+    const rect = zeroEmote.firstChild.getBoundingClientRect(); const image = animatedEmote.getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+      overlaps: rect.x >= image.x && rect.x + rect.width <= image.x + image.width && rect.y >= image.y && rect.y + rect.height <= image.y + image.height };
+  });
+  assert.equal(overlay.overlaps, true, 'The native zero-width overlay must stack on its base image.');
+  const stacked = PNG.sync.read(await page.screenshot({ omitBackground: true }));
+  const overlayPixel = (Math.floor(overlay.y + overlay.height / 2) * stacked.width + Math.floor(overlay.x + overlay.width / 2)) * 4;
+  assert.deepEqual([...stacked.data.subarray(overlayPixel, overlayPixel + 4)], [0, 0, 255, 255], 'Native overlay paint remains visible within the measured slot.');
   assert.equal(await page.evaluate(() => animatedEmote.parentNode === emoteBody && delayedEmote.parentNode === emoteBody), true);
   const palette = new Set();
   const end = Date.now() + 3000;
