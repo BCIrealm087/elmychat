@@ -39,7 +39,12 @@ function nativeEnhancement(command, key, url) {
     adapter.sessionId !== command.sessionId ? 'Waiting for the selected native Twitch session.' : null;
   // No hooks or marker have been created. The coordinator may wait and supply
   // a fresh exact URL for this same context/session, without relaxing ownership.
-  if (waiting) return { status: 'loading', reason: waiting, awaitingNative: true, resetRequired: false, providers: [] };
+  if (waiting) {
+    // An existing wrapper may already have hooks. Keep its uncertain/partial
+    // execution cleanup path rather than claiming preparation is untouched.
+    if (previous) throw new Error(waiting);
+    return { status: 'loading', reason: waiting, awaitingNative: true, resetRequired: false, providers: [] };
+  }
   const requested = [...(command.emotes.sevenTv ? ['7tv-emotes'] : []), ...(command.emotes.betterTtv ? ['ffzap-bttv'] : [])];
   if (!requested.length) throw new Error('No emote providers requested.');
   if (previous) {

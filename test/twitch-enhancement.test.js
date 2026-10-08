@@ -163,6 +163,10 @@ test('pre-install readiness names the failing guard without creating hooks or ac
     assert.equal(result.awaitingNative, true); assert.equal(result.resetRequired, false);
     assert.match(result.reason, fixture.reason);
     assert.equal(context.__elmychatTwitchEnhancementV1, undefined);
+    const existing = { owner: 'owner', resetRequired: true };
+    context.__elmychatTwitchEnhancementV1 = existing;
+    assert.throws(() => vm.runInNewContext(enhancementExpression(command), context), fixture.reason);
+    assert.equal(context.__elmychatTwitchEnhancementV1, existing);
   }
 });
 
