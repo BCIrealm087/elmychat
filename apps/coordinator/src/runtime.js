@@ -203,7 +203,7 @@ export class NativeCoordinator {
 
   async #retire(id, reason, restore = true, recoverEnhancement = false) {
     const record = this.#records.get(id);
-    if (this.config.sources.find(source => source.id === id)?.platform === 'twitch') this.#enhancement.detach(recoverEnhancement);
+    if (this.config.sources.find(source => source.id === id)?.platform === 'twitch') this.#enhancement.detach(recoverEnhancement, reason);
     if (record) {
       this.compositor.retireSource(id, record.sessionId);
       this.#records.delete(id);

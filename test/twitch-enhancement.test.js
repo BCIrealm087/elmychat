@@ -93,7 +93,8 @@ test('partial initialization and readiness timeout get one reset, then pause enh
     const lifecycle = new TwitchEnhancement(choices, 'owner', { download: async () => bootstrap, timeoutMs: 15, pollMs: 2,
       evaluate: async (_, command) => { calls.push(command.operation); if (command.operation === 'inspect') return null;
         if (command.operation === 'reset') { if (failure === 'reset-refused') throw new Error('ownership changed'); return { resetRequested: true }; }
-        return status(failure === 'partial' || command.operation === 'stop' ? 'unavailable' : 'loading'); } });
+        return { ...status(failure === 'partial' || command.operation === 'stop' ? 'unavailable' : 'loading'),
+          reason: failure === 'partial' && command.operation !== 'stop' ? 'FFZ appearance policy mismatch: fixture.' : null }; } });
     const p = page(); lifecycle.sync(p, record('first'), url);
     await until(() => calls.includes('reset'));
     for (let i = 0; i < 20; i += 1) lifecycle.sync(p, record(`replacement-${i}`), url);
@@ -103,6 +104,11 @@ test('partial initialization and readiness timeout get one reset, then pause enh
     assert.equal(lifecycle.diagnostics().status, 'unavailable');
     assert.equal(lifecycle.diagnostics().resetRequested, failure !== 'reset-refused');
     assert.equal(lifecycle.diagnostics().resetAttempted, true);
+    assert.equal(lifecycle.diagnostics().lastFailure.reason, failure === 'partial' ?
+      'FFZ appearance policy mismatch: fixture.' : 'Emote enhancement readiness timed out.');
+    assert.equal(lifecycle.diagnostics().lastFailure.stage, 'enhancement');
+    lifecycle.diagnostics().lastFailure.reason = 'Caller mutation';
+    assert.notEqual(lifecycle.diagnostics().lastFailure.reason, 'Caller mutation');
     await lifecycle.stop();
   }
 });
@@ -142,10 +148,12 @@ test('native failure before a readiness poll schedules owned recovery without wa
       return status(command.operation === 'stop' ? 'unavailable' : 'ready'); } });
   lifecycle.sync(page(), record('native-failure'), url);
   await until(() => lifecycle.diagnostics().status === 'ready' && !lifecycle.diagnostics().activeWork);
-  lifecycle.detach(true); await until(() => calls.includes('reset'));
+  lifecycle.detach(true, 'Native fixture observer failed.'); await until(() => calls.includes('reset'));
   lifecycle.sync(page(), record('recovered-native'), url);
   assert.equal(lifecycle.diagnostics().status, 'unavailable');
   assert.equal(calls.filter(call => call === 'begin').length, 1);
+  assert.equal(lifecycle.diagnostics().lastFailure.stage, 'native-adapter');
+  assert.equal(lifecycle.diagnostics().lastFailure.reason, 'Native fixture observer failed.');
   await lifecycle.stop();
 });
 

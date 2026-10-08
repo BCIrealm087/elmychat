@@ -51,6 +51,7 @@ export class TwitchEnhancement {
   #suppressed = false;
   #resetUsed = false;
   #resetOutcome = 'none';
+  #lastFailure = null;
   #stopped = false;
   #download;
   #clock;
@@ -69,7 +70,7 @@ export class TwitchEnhancement {
   }
 
   diagnostics() {
-    return { ...structuredClone(this.#state),
+    return { ...structuredClone(this.#state), lastFailure: structuredClone(this.#lastFailure),
       attempts: this.#attempts, resetAttempted: this.#resetUsed, resetOutcome: this.#resetOutcome,
       resetRequested: this.#resetOutcome === 'requested', activeWork: !!this.#job };
   }
@@ -91,9 +92,11 @@ export class TwitchEnhancement {
     this.#kick();
   }
 
-  detach(recover = false) {
+  detach(recover = false, reason) {
     if (this.#stopped) return;
     const binding = this.#desired;
+    if (recover && binding && !this.#lastFailure) this.#lastFailure = { ...structuredClone(this.#state),
+      status: 'unavailable', stage: 'native-adapter', reason: String(reason ?? 'Native Twitch adapter failed before enhancement polling.').slice(0,240) };
     if (binding && recover) binding.recover = true;
     this.#controller?.abort(); this.#desired = undefined; this.#terminal = undefined;
     if (this.#state.status !== 'off') this.#state = { ...this.#state, status: 'unavailable', reason: 'Waiting for the selected Twitch generation.' };
@@ -146,6 +149,7 @@ export class TwitchEnhancement {
     // Exactly one recovery refresh per lifecycle, including failures detected
     // by the native adapter before the slower enhancement readiness poll.
     this.#state.resetRequired = true;
+    this.#lastFailure ??= { ...structuredClone(this.#state), stage: 'recovery' };
     this.#resetUsed = true; this.#suppressed = true; this.#resetOutcome = 'unconfirmed';
     const result = await this.#call(binding, 'reset');
     if (result?.resetRequested) this.#resetOutcome = 'requested';
@@ -201,6 +205,7 @@ export class TwitchEnhancement {
       if (!live()) return;
       this.#terminal = binding;
       this.#state = { ...this.#state, status: 'unavailable', reason: String(error?.message ?? error).slice(0,240) };
+      this.#lastFailure = { ...structuredClone(this.#state), stage: 'enhancement' };
       if (binding.begun) {
         try {
           const stopped = await this.#call(binding, 'stop');
