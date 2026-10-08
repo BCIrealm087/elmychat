@@ -3,12 +3,14 @@
   const instances = new WeakMap();
   const fine = {
     searchParent: (node, name) => name === 'chat-line' ? instances.get(node) : null,
-    getChildNode: instance => instance.node,
+    getFirstChild: instance => instance.rendered,
+    // Model FFZ's real scan boundary: searching from ChatLine returns null.
+    getChildNode: input => input?._ffz_no_scan ? null : input?.node,
   };
   globalThis.fixtureBindMessage = (node, id) => {
     node.removeAttribute('data-id'); node.removeAttribute('data-a-target');
     node.className = 'chat-line__message'; node.dataset.roomId = 'same-room'; node.dataset.userId = 'same-user';
-    const instance = { node, props: { message: { id } } };
+    const instance = { _ffz_no_scan: true, rendered: { node }, props: { message: { id } } };
     instances.set(node, instance); return instance;
   };
   globalThis.fixtureMessageInstances = nativeRoots.map((node, index) => fixtureBindMessage(node, `fixture-message-${index}`));

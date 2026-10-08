@@ -130,7 +130,8 @@ function nativeEmoteProof(command, bootstrapUrl, key, selectors) {
     };
     const adapter = globalThis.__elmychatTwitchAdapterV1?.diagnostics();
     const nativeAdapter = adapter ? {status:adapter.status,failure:adapter.failure,trackedRoots:adapter.trackedRoots,
-      retiredRoots:adapter.retiredRoots,revision:adapter.revision,messageWidth:adapter.messageWidth} : null;
+      retiredRoots:adapter.retiredRoots,revision:adapter.revision,messageWidth:adapter.messageWidth,
+      rendererIdentifiedRoots:adapter.rendererIdentifiedRoots ?? null,identityTransfers:adapter.identityTransfers ?? null} : null;
     if (adapter && adapter.status!=='running') reason = `Native Twitch adapter ${adapter.status}: ${adapter.failure ?? 'inactive'}.`;
     const hosts = { currentRoots:current.length, sampledRoots:Math.min(80,current.length),
       nativeSelectorRoots:current.filter(node=>node.matches(selectors.native)).length,

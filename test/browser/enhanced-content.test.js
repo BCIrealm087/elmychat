@@ -42,6 +42,11 @@ async function setup(t) {
 
 test('renderer-owned content changes and unique remounts preserve sequence, slots and retirement', { timeout: 30000 }, async t => {
   const { page, call, drain, core, initial, admit, place } = await setup(t);
+  assert.deepEqual(await page.evaluate(() => ({
+    guardedHost: fixtureFine.getChildNode(fixtureMessageInstances[0]),
+    identified: __elmychatTwitchAdapterV1.diagnostics().rendererIdentifiedRoots,
+    scanGuard: fixtureMessageInstances[0]._ffz_no_scan,
+  })), { guardedHost: null, identified: 2, scanGuard: true });
   const before = core.entries().map(entry => ({ id: entry.messageId, sequence: entry.sequence }));
   await page.evaluate(() => {
     nativeRoots[0].replaceChildren(document.createTextNode('Same message rendered as emotes and badges'));

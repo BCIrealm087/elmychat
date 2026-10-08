@@ -27,7 +27,7 @@ try {
     console.log('Use known enabled channel/global emotes and ordinary text/badges during this window. Watch native order, spacing and wrapping in OBS.');
     let last;
     const report = await runEmoteProof(config, { signal: cancellation.signal, onProgress: snapshot => {
-      const summary = `${snapshot.status}: ${snapshot.providers.map(provider => `${provider.id} ${provider.moduleEnabled ? 'loaded' : 'loading'}, ${provider.visibleImages} visible images`).join('; ')}; Twitch hosts ${snapshot.hosts?.currentRoots ?? '?'}, visible ${snapshot.hosts?.visibleRoots ?? '?'}, adapter ${snapshot.nativeAdapter?.status ?? 'unknown'}`;
+      const summary = `${snapshot.status}: ${snapshot.providers.map(provider => `${provider.id} ${provider.moduleEnabled ? 'loaded' : 'loading'}, ${provider.visibleImages} visible images`).join('; ')}; Twitch hosts ${snapshot.hosts?.currentRoots ?? '?'}, visible ${snapshot.hosts?.visibleRoots ?? '?'}, adapter ${snapshot.nativeAdapter?.status ?? 'unknown'}, identified ${snapshot.nativeAdapter?.rendererIdentifiedRoots ?? '?'}, transfers ${snapshot.nativeAdapter?.identityTransfers ?? '?'}`;
       if (summary !== last) { console.log(summary); last = summary; }
     } });
     const output = resolve('.runtime/proof'); await mkdir(output, { recursive: true });
