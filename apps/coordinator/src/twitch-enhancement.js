@@ -49,6 +49,10 @@ export class TwitchEnhancement {
         reason: this.#suppressed ? 'Emotes paused after partial initialization; native Twitch recovered. Restart or retry explicitly to enable emotes.' : null,
         resetRequired: false, providers: [] };
     }
+    // Twitch can update its URL without replacing the execution context while
+    // the bootstrap downloads. Only discovery may supply the fresh URL, and
+    // only before the wrapper has acknowledged installation.
+    if (!this.#desired.begun) this.#desired.documentUrl = documentUrl;
     this.#kick();
   }
 
@@ -85,6 +89,10 @@ export class TwitchEnhancement {
     if (['begin', 'poll', 'stop'].includes(operation) && (!result || !['loading', 'ready', 'unavailable'].includes(result.status) || !Array.isArray(result.providers) || result.providers.length > 2)) {
       throw new Error('Unsupported enhancement status response.');
     }
+    if (result?.awaitingNative !== undefined && (operation !== 'begin' || result.awaitingNative !== true ||
+        result.status !== 'loading' || result.resetRequired !== false || result.providers.length)) {
+      throw new Error('Unsupported native preparation response.');
+    }
     return result;
   }
 
@@ -110,6 +118,14 @@ export class TwitchEnhancement {
 
   async #run(binding, signal) {
     const live = () => this.#live(binding, signal);
+    const begin = async () => {
+      binding.begun = true; // Response loss can still mean the script ran.
+      const snapshot = await this.#call(binding, 'begin', { integrity: this.#bootstrap?.integrity });
+      if (!live()) return;
+      // Only this explicit, pre-mutation response proves that no loader ran.
+      if (snapshot.awaitingNative) binding.begun = false;
+      this.#state = snapshot;
+    };
     try {
       if (!binding.begun) {
         const existing = await this.#call(binding, 'inspect');
@@ -125,10 +141,7 @@ export class TwitchEnhancement {
           }
         }
         if (!live()) return;
-        binding.begun = true; // Response loss can still mean the script ran.
-        const snapshot = await this.#call(binding, 'begin', { integrity: this.#bootstrap?.integrity });
-        if (!live()) return;
-        this.#state = snapshot;
+        await begin();
       } else {
         const snapshot = await this.#call(binding, 'poll');
         if (!live()) return;
@@ -138,12 +151,16 @@ export class TwitchEnhancement {
       while (live()) {
         if (this.#state.status === 'unavailable') throw new Error(this.#state.reason ?? 'Emotes unavailable.');
         if (this.#state.status === 'ready') { this.#nextPoll = this.#clock() + 5000; return; }
-        if (this.#clock() >= deadline) throw new Error('Emote enhancement readiness timed out.');
+        if (this.#clock() >= deadline) throw new Error(binding.begun ? 'Emote enhancement readiness timed out.' :
+          `Native Twitch preparation timed out: ${this.#state.reason ?? 'document not ready'}`);
         await delay(this.#poll, undefined, { signal });
         if (!live()) return;
-        const snapshot = await this.#call(binding, 'poll');
-        if (!live()) return;
-        this.#state = snapshot;
+        if (!binding.begun) await begin();
+        else {
+          const snapshot = await this.#call(binding, 'poll');
+          if (!live()) return;
+          this.#state = snapshot;
+        }
       }
     } catch (error) {
       if (!live()) return;

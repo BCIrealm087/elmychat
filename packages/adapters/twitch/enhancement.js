@@ -33,8 +33,13 @@ function nativeEnhancement(command, key, url) {
     return command.operation === 'stop' ? previous.stop() : previous.poll();
   }
   const adapter = globalThis.__elmychatTwitchAdapterV1?.diagnostics();
-  if (location.href !== command.documentUrl || !document.body || !document.head ||
-      adapter?.status !== 'running' || adapter.sessionId !== command.sessionId) throw new Error('Native Twitch generation changed or is not ready.');
+  const waiting = location.href !== command.documentUrl ? 'Twitch URL changed before emote installation.' :
+    !document.body || !document.head ? 'Waiting for the Twitch document.' :
+    adapter?.status !== 'running' ? 'Waiting for the native Twitch adapter.' :
+    adapter.sessionId !== command.sessionId ? 'Waiting for the selected native Twitch session.' : null;
+  // No hooks or marker have been created. The coordinator may wait and supply
+  // a fresh exact URL for this same context/session, without relaxing ownership.
+  if (waiting) return { status: 'loading', reason: waiting, awaitingNative: true, resetRequired: false, providers: [] };
   const requested = [...(command.emotes.sevenTv ? ['7tv-emotes'] : []), ...(command.emotes.betterTtv ? ['ffzap-bttv'] : [])];
   if (!requested.length) throw new Error('No emote providers requested.');
   if (previous) {

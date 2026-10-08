@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setTimeout as delay } from 'node:timers/promises';
+import vm from 'node:vm';
+import { enhancementExpression } from '../packages/adapters/twitch/enhancement.js';
 import { TwitchEnhancement } from '../apps/coordinator/src/twitch-enhancement.js';
 import { validateRuntimeConfig } from '../apps/coordinator/src/runtime.js';
 
@@ -144,4 +146,72 @@ test('native failure before a readiness poll schedules owned recovery without wa
   assert.equal(lifecycle.diagnostics().status, 'unavailable');
   assert.equal(calls.filter(call => call === 'begin').length, 1);
   await lifecycle.stop();
+});
+
+test('pre-install readiness names the failing guard without creating hooks or accepting a stale URL/session', () => {
+  const command = { operation: 'begin', owner: 'owner', sessionId: 'owner:first', documentUrl: url, emotes: choices };
+  const cases = [
+    { href: `${url}?changed`, body: {}, head: {}, adapter: { status: 'running', sessionId: command.sessionId }, reason: /URL changed/ },
+    { href: url, body: {}, head: null, adapter: { status: 'running', sessionId: command.sessionId }, reason: /document/ },
+    { href: url, body: {}, head: {}, adapter: null, reason: /adapter/ },
+    { href: url, body: {}, head: {}, adapter: { status: 'running', sessionId: 'foreign' }, reason: /session/ },
+  ];
+  for (const fixture of cases) {
+    const context = { location: { href: fixture.href }, document: { body: fixture.body, head: fixture.head },
+      __elmychatTwitchAdapterV1: { diagnostics: () => fixture.adapter } };
+    const result = vm.runInNewContext(enhancementExpression(command), context);
+    assert.equal(result.awaitingNative, true); assert.equal(result.resetRequired, false);
+    assert.match(result.reason, fixture.reason);
+    assert.equal(context.__elmychatTwitchEnhancementV1, undefined);
+  }
+});
+
+test('Apply waits for a fresh exact URL and native readiness after download, with one installation and no reset', async () => {
+  let release; let currentUrl = url; let nativeReady = true; let installs = 0; let downloads = 0;
+  const calls = [];
+  const lifecycle = new TwitchEnhancement(choices, 'owner', { pollMs: 2,
+    download: async () => { downloads += 1; return new Promise(resolve => { release = resolve; }); },
+    evaluate: async (_, command) => {
+      calls.push(command);
+      if (command.operation === 'inspect') return null;
+      if (command.operation === 'begin') {
+        if (command.documentUrl !== currentUrl || !nativeReady) return { ...status('loading', false), awaitingNative: true, reason: 'Waiting for the selected native Twitch session.' };
+        installs += 1; return status('ready');
+      }
+      return status('unavailable');
+    } });
+  const p = page(), r = record('first'); lifecycle.sync(p, r, url);
+  await until(() => !!release);
+  currentUrl = `${url}?fresh`; release(bootstrap);
+  await until(() => lifecycle.diagnostics().awaitingNative === true);
+  assert.equal(installs, 0);
+  nativeReady = false; lifecycle.sync(p, r, currentUrl);
+  await until(() => calls.some(command => command.operation === 'begin' && command.documentUrl === currentUrl));
+  assert.equal(installs, 0); nativeReady = true;
+  await until(() => lifecycle.diagnostics().status === 'ready' && !lifecycle.diagnostics().activeWork);
+  assert.equal(installs, 1); assert.equal(downloads, 1);
+  assert.equal(calls.some(command => ['reset', 'poll'].includes(command.operation)), false);
+  await lifecycle.stop();
+});
+
+test('pre-install waiting expires without reset and stops promptly without a second begin', async () => {
+  for (const cancel of [false, true]) {
+    const calls = [];
+    const lifecycle = new TwitchEnhancement(choices, 'owner', { download: async () => bootstrap, pollMs: cancel ? 500 : 2, timeoutMs: 15,
+      evaluate: async (_, command) => {
+        calls.push(command.operation);
+        return command.operation === 'inspect' ? null : { ...status('loading', false), awaitingNative: true, reason: 'Waiting for the Twitch document.' };
+      } });
+    lifecycle.sync(page(), record('first'), url);
+    await until(() => lifecycle.diagnostics().awaitingNative === true);
+    if (cancel) await lifecycle.stop();
+    else {
+      await until(() => lifecycle.diagnostics().status === 'unavailable');
+      assert.match(lifecycle.diagnostics().reason, /preparation timed out.*Twitch document/);
+      await lifecycle.stop();
+    }
+    assert.equal(calls.some(operation => ['stop', 'poll', 'reset'].includes(operation)), false);
+    if (cancel) assert.equal(calls.filter(operation => operation === 'begin').length, 1);
+    assert.equal(lifecycle.diagnostics().resetAttempted, false);
+  }
 });
