@@ -252,6 +252,10 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
     assert.equal(twitchLoads, count);
     await choices(true, true);
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
+    const latestLoads = twitchLoads;
+    await assert.rejects(overlay.evaluate(({ revision, overlayUrl, expectedUrl }) => __elmychatManagedOverlayV1.twitch({ operation: 'refresh', revision, previousRevision: null, overlayUrl, expectedUrl }),
+      { revision: refresh.revision, overlayUrl: `${base}/overlay`, expectedUrl: operator.overlay('127.0.0.1').sources[0].url }), /Stale Twitch refresh/);
+    assert.equal(twitchLoads, latestLoads);
     await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').waitFor({ state: 'attached' });
     await until(async () => await overlay.frameLocator('#twitch').locator('img[data-set="fixture-ffzap-bttv"]').isVisible()); await preserved();
     await choices(false, true);
@@ -281,6 +285,9 @@ for (const sameProcess of [false, true]) test(`managed emote controls preserve n
     const warmLoads = bootstrapLoads;
     await controls.getByRole('button', { name: 'Disconnect and restore' }).click(); await complete(controls, 'Coordinator disconnected');
     await controls.getByRole('button', { name: 'Connect', exact: true }).click(); await complete(controls, 'Coordinator connecting');
+    await operator.tick();
+    assert.match(operator.health().lastError, /Expected one selected page; found 2/, 'A new connection must reject ambiguous overlays.');
+    await other.close();
     await until(health => health.chatConnected && health.sources[0].enhancement.status === 'ready');
     assert.equal(bootstrapLoads, warmLoads + 1, 'Saved providers must reload once into a clean document on warm reconnect.');
     assert.equal(await youtubeFrame.evaluate(() => globalThis.documentToken), youtubeToken);

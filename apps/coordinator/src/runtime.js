@@ -171,6 +171,7 @@ export class NativeCoordinator {
     // Preflight failures leave the live loader and native sessions untouched.
     const available = await call('inspect');
     if (!available?.available || this.#stopping || this.#page.disconnected) throw new Error('Managed Twitch refresh is unavailable.');
+    fields.previousRevision = available.revision ?? null;
     const oldContext = frames.find(frame => sourceMatches(frame, source))?.context;
     await this.#enhancement.stop();
     await this.#retire(source.id, 'emote-settings-refresh');

@@ -8,9 +8,10 @@ globalThis.__elmychatManagedOverlayV1 = Object.freeze({
     const record = frames.get('twitch');
     if (location.href !== command.overlayUrl || !record || record.url !== command.expectedUrl ||
         !record.frame.isConnected || record.frame.getAttribute('src') !== record.assignedUrl) throw new Error('Selected Twitch source changed; wait for the managed overlay.');
-    if (command.operation === 'inspect') return { available: true };
+    if (command.operation === 'inspect') return { available: true, revision: record.revision ?? null };
     if (command.operation !== 'refresh' || typeof command.revision !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(command.revision)) throw new Error('Invalid Twitch refresh revision.');
     if (record.revision !== command.revision) {
+      if ((record.revision ?? null) !== command.previousRevision) throw new Error('Stale Twitch refresh revision.');
       const url = new URL(record.url);
       url.searchParams.set('_elmychatRefresh', command.revision);
       record.frame.src = url.href;
