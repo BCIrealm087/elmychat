@@ -22,7 +22,8 @@ try {
     console.log(JSON.stringify(await resetEmoteProof(config)));
     console.log('Twitch-only refresh requested. Wait for native chat to reconnect before another test.');
   } else {
-    console.log(`Testing ${mode} in the selected Twitch frame for ${Math.round((config.durationMs ?? 60000)/1000)} seconds. Native chat must remain connected.`);
+    console.log(`Preparing ${mode}: downloading FFZ and attaching to the selected Twitch frame. Native chat must remain connected.`);
+    console.log(`The ${Math.round((config.durationMs ?? 60000)/1000)}-second observation window begins after preparation.`);
     console.log('Use known enabled channel/global emotes and ordinary text/badges during this window. Watch native order, spacing and wrapping in OBS.');
     let last;
     const report = await runEmoteProof(config, { signal: cancellation.signal, onProgress: snapshot => {
