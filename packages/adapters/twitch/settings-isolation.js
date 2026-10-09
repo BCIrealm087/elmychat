@@ -28,6 +28,11 @@ export function prepareFfzSettings(emotes) {
     name: 'Elmychat emotes', context: [] }])], ['addons.enabled', '[]'],
   ...Object.entries(policy).map(([key, value]) => [`p:0:${key}`, JSON.stringify(value)])]);
   const maxEntries = 256, maxBytes = 65536, maxValueBytes = 4096;
+  // FFZ builds these UI lists even without opening its settings menu. The
+  // audited engine writes >9 KiB of cfg-seen keys in a fresh document.
+  // They have no effect on emote data or the protected appearance policy.
+  const uiKeys = new Set(['cfg-seen', 'cfg-collapsed']), maxUiValueBytes = 32768;
+  let uiWritesDropped = 0;
   let instance, releaseValues, registered = false, stopped = false, problem = null, verified = false;
   let priorDefaults = [];
   const registry = [];
@@ -77,10 +82,17 @@ export function prepareFfzSettings(emotes) {
         }
         // Count UTF-8 bytes before retaining anything; no unbounded history.
         const bytes = new TextEncoder().encode(key + encoded).length;
-        if (bytes > maxValueBytes || !this.#values.has(key) && this.#values.size >= maxEntries) reject('FFZ session settings capacity exceeded.');
+        const optionalUi = uiKeys.has(key);
         let total = bytes;
         for (const [other, data] of this.#values) if (other !== key) total += new TextEncoder().encode(other + data).length;
-        if (total > maxBytes) reject('FFZ session settings capacity exceeded.');
+        const exceedsCapacity = bytes > (optionalUi ? maxUiValueBytes : maxValueBytes) ||
+          !this.#values.has(key) && this.#values.size >= maxEntries || total > maxBytes;
+        if (exceedsCapacity) {
+          // Keep the previous value intact. Optional UI bookkeeping must not
+          // poison otherwise valid emote initialization when capacity is full.
+          if (optionalUi) { uiWritesDropped = Math.min(uiWritesDropped + 1, 1000000); return; }
+          reject('FFZ session settings capacity exceeded.');
+        }
         this.#values.set(key, encoded); this.emit('set', key, value, false);
       }
       delete(key) {
@@ -132,7 +144,7 @@ export function prepareFfzSettings(emotes) {
     snapshot() {
       return { status: stopped ? 'released' : verified ? 'isolated' : 'pending',
         registrationRetained: globalThis[property] === registry,
-        entries: instance?.size ?? seeds.size, maxEntries, maxBytes, maxValueBytes,
+        entries: instance?.size ?? seeds.size, maxEntries, maxBytes, maxValueBytes, maxUiValueBytes, uiWritesDropped,
         settings: priorDefaults.map(record => ({ ...record, applied: typeof record.applied === 'object' ? { ...record.applied } : record.applied })) };
     },
   };

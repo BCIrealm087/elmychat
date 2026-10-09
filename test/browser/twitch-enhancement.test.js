@@ -42,6 +42,11 @@ test('isolated FFZ appearance preserves native badges/type and bounds counts wit
     await call('begin'); await page.waitForFunction(() => !!globalThis.fixtureFfz);
     const ready = await call('poll'); assert.equal(ready.status,'ready'); assert.equal(ready.isolation.status,'isolated');
     assert.equal(ready.isolation.settings.length,13); assert.equal(ready.isolation.registrationRetained,false);
+    assert.equal(ready.isolation.uiWritesDropped,0);
+    assert.ok(await page.evaluate(()=>new TextEncoder().encode(JSON.stringify(fixtureFfz.settings.provider.get('cfg-seen'))).length)>4096);
+    await page.evaluate(()=>fixtureFfz.settings.provider.set('cfg-seen', ['x'.repeat(40000)]));
+    const optionalPressure=await call('poll');
+    assert.equal(optionalPressure.status,'ready'); assert.equal(optionalPressure.isolation.uiWritesDropped,1);
     await page.locator('img[data-provider="ffz"]').first().waitFor({ state:'attached' });
     assert.deepEqual(await appearance(),before);
     assert.equal(await page.evaluate(() => nativeBadge.isConnected && nativeBadge.parentElement===nativeRoots[0]),true);

@@ -233,13 +233,14 @@ test('health snapshots retain bounded known diagnostics and detach nested isolat
   const report = { ...status('ready'), reason:'r'.repeat(1000), engineVersion:'v'.repeat(1000),
     unknownArchive:new Array(10000).fill('unretained'),
     providers:[{id:'7tv-emotes',moduleReady:true,version:'x'.repeat(1000),setCount:1,emoteCount:2,dataStatus:'available'}],
-    isolation:{status:'isolated',entries:12,settings:[{key:'chat.badges.hidden',priorDefault:'structured-or-computed',applied:{'m-ffz':true}}]} };
+    isolation:{status:'isolated',entries:12,uiWritesDropped:3,settings:[{key:'chat.badges.hidden',priorDefault:'structured-or-computed',applied:{'m-ffz':true}}]} };
   const lifecycle = new TwitchEnhancement(choices,'owner',{download:async()=>bootstrap,
     evaluate:async(_,command)=>command.operation==='inspect'?null:command.operation==='stop'?status('unavailable'):report});
   lifecycle.sync(page(),record('bounded'),url);await until(()=>lifecycle.diagnostics().status==='ready');
   const snapshot=lifecycle.diagnostics();
   assert.equal(snapshot.unknownArchive,undefined);assert.equal(snapshot.reason.length,240);
   assert.equal(snapshot.engineVersion.length,128);assert.equal(snapshot.providers[0].version.length,80);
+  assert.equal(snapshot.isolation.maxUiValueBytes,32768); assert.equal(snapshot.isolation.uiWritesDropped,3);
   snapshot.isolation.settings[0].applied['m-ffz']=false; report.isolation.settings[0].applied['m-ffz']=false;
   assert.equal(lifecycle.diagnostics().isolation.settings[0].applied['m-ffz'],true);
   await lifecycle.stop();

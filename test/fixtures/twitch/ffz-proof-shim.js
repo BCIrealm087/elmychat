@@ -30,7 +30,13 @@
   if (!globalThis.fixtureIgnoreIsolation) for (const register of globalThis.ffz_providers ?? []) register({
     settings, Provider, registerProvider:(key, Class)=>{if(key==='elmychat-session')Isolated=Class;},
   });
-  if (Isolated) settings.provider = new Isolated(settings);
+  if (Isolated) {
+    settings.provider = new Isolated(settings);
+    // Model FFZ's automatic settings-menu bookkeeping before add-ons load.
+    // The real engine's initial cfg-seen list is larger than an ordinary value.
+    settings.provider.set('cfg-seen', Array.from({length:500}, (_,i)=>`chat.fixture.setting-${i}.appearance`));
+    settings.provider.set('cfg-collapsed', ['chat.appearance', 'add-ons']);
+  }
   // Model reviewed appearance settings, not upstream rendering internals.
   if (settings.get('chat.font-size') !== 14) document.querySelector('.scroll').style.fontSize=`${settings.get('chat.font-size')}px`;
   let metadataReady = !globalThis.fixtureMetadataDelay;

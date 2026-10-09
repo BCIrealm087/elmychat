@@ -22,6 +22,7 @@ function boundedSnapshot(input) {
     if (!['pending', 'isolated', 'released'].includes(info.status) || !Array.isArray(info.settings) || info.settings.length > 16) invalid();
     result.isolation = { status: info.status, registrationRetained: info.registrationRetained === true,
       entries: count(info.entries,256), maxEntries: 256, maxBytes: 65536, maxValueBytes: 4096,
+      maxUiValueBytes: 32768, uiWritesDropped: count(info.uiWritesDropped ?? 0,1000000),
       settings: info.settings.map(record => {
         if (typeof record.key !== 'string' || record.key.length > 128) invalid();
         const scalar = value => value == null || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) ? value ?? null : string(value,80);

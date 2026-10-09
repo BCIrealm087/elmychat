@@ -84,6 +84,43 @@ test('settings capacity bounds entries, UTF-8 values and retained bytes, then re
   }
 });
 
+test('FFZ startup menu metadata exceeds ordinary values safely and optional pressure never poisons emote readiness', () => {
+  const seen = Array.from({ length: 500 }, (_, i) => `chat.fixture.setting-${i}.appearance`);
+  const size = value => new TextEncoder().encode(JSON.stringify(value)).length;
+  assert.ok(size(seen) > 4096 && size(seen) < 32768);
+  for (const pressure of ['value', 'entries', 'bytes']) {
+    const target = documentSettings(), provider = target.select();
+    provider.set('cfg-seen', seen);
+    const baseline = JSON.stringify(provider.get('cfg-seen'));
+    provider.get('cfg-seen').push('Read mutation');
+    assert.equal(JSON.stringify(provider.get('cfg-seen')), baseline);
+    if (pressure === 'value') provider.set('cfg-seen', ['界'.repeat(11000)]);
+    else if (pressure === 'entries') {
+      for (let i = 0; provider.size < 256; i += 1) provider.set(`scratch-${i}`, i);
+      provider.set('cfg-collapsed', ['new-section']);
+      assert.equal(provider.has('cfg-collapsed'), false);
+    } else {
+      const retainedBytes = () => [...provider.entries()].reduce((sum, [key,value]) => sum + key.length + size(value), 0);
+      for (let i = 0; retainedBytes() + `scratch-${i}`.length + size('x'.repeat(3900)) <= 65536; i += 1) {
+        provider.set(`scratch-${i}`, 'x'.repeat(3900));
+      }
+      provider.set('cfg-collapsed', seen);
+      assert.equal(provider.has('cfg-collapsed'), false);
+    }
+    assert.equal(JSON.stringify(provider.get('cfg-seen')), baseline);
+    assert.equal(target.isolation.snapshot().uiWritesDropped, 1);
+    target.isolation.verify(target.settings, true);
+    assert.equal(target.isolation.snapshot().status, 'isolated');
+    assert.ok(provider.size <= 256);
+    assert.ok([...provider.entries()].reduce((sum, [key,value]) => sum + new TextEncoder().encode(key + JSON.stringify(value)).length, 0) <= 65536);
+    target.isolation.release();
+    assert.equal(provider.has('cfg-seen'), false);
+    assert.equal(provider.size, 15);
+    provider.set('cfg-collapsed', seen);
+    assert.equal(target.isolation.snapshot().uiWritesDropped, 1);
+  }
+});
+
 test('stop before delayed FFZ initialization leaves a safe bounded registration for late chunks', () => {
   const target = documentSettings(); target.isolation.release();
   assert.equal(target.isolation.snapshot().registrationRetained, true);
