@@ -1,6 +1,6 @@
 # Enhanced native content (step 10)
 
-Step 10 preserves a message's local identity and arrival sequence when Twitch's FFZ renderer identifies an enhancement update. Elmychat continues measuring and positioning renderer-owned hosts inside Twitch's document. It never rebuilds text/emotes, clones hosts, moves descendants or writes invented platform keys. Provider choices still use step 9's explicit JSON; saved controls are step 11 work.
+Step 10 preserves a message's local identity and arrival sequence when Twitch's FFZ renderer identifies an enhancement update. Elmychat continues measuring and positioning renderer-owned hosts inside Twitch's document. It never rebuilds text/emotes, clones hosts, moves descendants or writes invented platform keys. Provider choices use [saved managed controls](operator-controls.md#twitch-emotes) or step 9's explicit JSON. See [the final support matrix](emote-support.md).
 
 ## Identity contract
 
@@ -27,7 +27,7 @@ Retired entries remain retired through a verified same-flush handoff. Ordinary r
 | Rerenders and rapid arrivals | Unique verified replacements preserve sequence; actual new IDs keep arrival order. Fixtures cover ambiguity, reuse, retirement, bursts, foreign host styles and idle behavior. |
 | Platform marks / cross-origin sources | Marks stay in their separate owned layer. Real-CDP page-context and OOPIF fixtures check identity/sequence, YouTube session preservation, gaps and explicit spacer alpha through Twitch remount/growth. |
 
-The step 8 live reports establish basic 7TV/BTTV rendering in OBS 32.2.2 / CEF 127 and show FFZ replacing original hosts. They do not establish live continuity through the new Fine reader, exact enhanced typography, every provider category, personal emotes, cosmetics or prolonged stability. The automatic step 10 regressions establish our bounded identity/geometry behavior, not those additional live claims. Appearance/profile isolation remains step 12 work. Original DOM-object retention is still not claimed.
+The step 8 live reports establish basic 7TV/BTTV rendering in OBS 32.2.2 / CEF 127 and show FFZ replacing original hosts. They do not establish live continuity through the new Fine reader, exact enhanced typography, every provider category, personal emotes, cosmetics or prolonged stability. The automatic step 10 regressions establish our bounded identity/geometry behavior, not those additional live claims. Appearance/profile isolation is implemented in [step 12](emote-compatibility.md), with full live appearance parity still unverified. Original DOM-object retention is still not claimed.
 
 ## Verification
 

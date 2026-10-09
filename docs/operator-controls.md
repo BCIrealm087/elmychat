@@ -23,6 +23,8 @@ The coordinator waits until that exact overlay page exists. The controls show so
 
 ## Twitch emotes
 
+See [setup, the final support matrix and troubleshooting](emote-support.md) for the tested OBS/provider versions and evidence limits. Basic provider rendering is observed; Ready is not a promise that every emote category or channel has been verified.
+
 Step 11 adds independent **7TV** and **BTTV** choices under **Twitch emotes**. Both may be enabled together; old settings default both off. After saving sources and connecting the selected managed OBS overlay, choose providers and click **Apply emotes**. Ordinary source edits preserve the saved choices. Unsaved checkbox edits survive status polling; disconnected controls let you choose a draft, but applying requires a connection. The choices also appear in explicit runtime JSON as Twitch-only `sources[].emotes`.
 
 Applying changed choices or clicking **Retry emotes** refreshes only the selected overlay's Twitch frame and resets its retained Twitch history. It preserves the coordinator, YouTube session and retained message sequences, gap and current-run spacers. No additional extension or provider login is needed for the public emote route. The overlay shell itself and other overlays at the same URL are not refreshed. If an already loaded overlay predates these controls, reload that overlay once to load the updated managed script; new overlays have the helper automatically.
@@ -36,6 +38,8 @@ Apply keeps emote status Loading while the new Twitch document/native session be
 Normal emote support uses isolated document-local FFZ settings. It does not import or save shared FFZ profiles/add-on preferences, and suppresses the reviewed extra provider badges, name paints, animated avatars and update notices. Native Twitch badges remain supported. Missing isolation/appearance APIs are compatibility failures, with details in Diagnostics and the existing explicit retry path. Some upstream base styles/renderer changes can still affect appearance; see [step 12 compatibility and teardown](emote-compatibility.md).
 
 Node tests cover default migration, preference validation/reload, independent/both-provider choices, persistence and preflight rollback, unchanged-choice no-ops, refresh bounds and native fallback. Browser tests use a deterministic enhancer shim through both OOPIF and page-context CDP paths to verify keyboard operation, draft/persisted choices, narrow layouts, selected-overlay-only refresh, provider combinations, bounded retry, reapplication after refresh, retained YouTube identities/gap/spacers and transparent spacer pixels. Local Node checks pass; local browser execution fails at launch because Chromium is absent, so Windows/Linux CI supplies browser verification. These fixtures do not expand the bounded live provider/category evidence. No repeat routine live gate is required.
+
+If emotes become unavailable, capture Diagnostics before retrying: `sources[].enhancement.lastFailure` retains the original reason/stage through native recovery, and a new Apply/retry clears it. Native chat connection status remains separate. Test newly arriving enabled emotes; activation need not convert historical names from text. Do not run the legacy `proof:emotes` loader alongside normal controls; it does not verify the managed isolated-settings path. See [troubleshooting](emote-support.md#troubleshooting).
 
 ## Spacing
 

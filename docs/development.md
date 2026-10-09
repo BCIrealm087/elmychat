@@ -17,6 +17,7 @@ Use `BCIrealm087/elmychat` on the current development branch, `codex-improvement
 | `npm run proof:synthetic` | Generate synthetic rendering evidence and screenshot |
 | `npm run proof:targets -- ENDPOINT` | List local debugger page IDs and exact URLs |
 | `npm run proof:native -- CONFIG` | Temporarily position one native message per source |
+| `npm run proof:emotes -- 7tv` (or `bttv` / `both` / `reset`) | Legacy opt-in emote diagnostic; conflicts with normal enhancement and needs its own reset |
 
 The commands work in PowerShell and Bash without shell-specific environment-variable syntax. The dev watcher follows JavaScript imports; restart it after changing the HTML file because the shell reads HTML at startup. If port 3210 is occupied, stop the conflicting service or change the entry-point port deliberately; native coordination accepts the explicit JSON config described in [coordinator setup](coordinator.md).
 
@@ -45,3 +46,5 @@ Step 6 adds source configuration and live spacing controls. Windows/Linux [CI ru
 Step 7 adds sustained resource/lifecycle pressure checks. The Node suite processes 24000 reports with repeated source replacement and idle polling; the native-CDP load suite generates 3200 new roots, edits spacing, checks bounded style/report ownership, reconnects ten times and isolates an overloaded source. `hardening-load.json` joins the CI artifacts. A shared paint wait retries only destroyed/detached execution contexts during expected navigation, with bounded waits and strict lifecycle/identity assertions afterwards. See [hardening acceptance, diagnostics and distribution boundary](hardening.md).
 
 Step 7 verification passed Windows/Linux [CI run 37676706252](https://github.com/BCIrealm087/elmychat/actions/runs/37676706252): 42 Node and 24 browser tests per OS, with no skipped tests. The full initial milestone is complete for its documented bounded scope.
+
+Steps 8–13 add optional FFZ-based Twitch emotes. See [support/evidence limits](emote-support.md), [isolation and source audit](emote-compatibility.md), and the [roadmap outcome](emote-support-roadmap.md#step-13-outcome). The final runtime baseline at `4ec0cbc` passed 79 Node and 60 browser tests per OS in Windows/Linux CI; documentation completion reruns the full suite. Normal controls are preferred for operator use. The legacy diagnostic is a distinct, less-isolated loader and cannot verify normal provider isolation. Preserve the distinction between module readiness, actual provider images, and separately verified categories.
