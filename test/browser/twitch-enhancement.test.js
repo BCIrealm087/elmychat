@@ -31,6 +31,9 @@ test('isolated FFZ appearance preserves native badges/type and bounds counts wit
     });
     await page.route(ffzBootstrapUrl, route => route.fulfill({ contentType:'text/javascript', headers:{'access-control-allow-origin':'*'}, body:shim }));
     await page.evaluate(twitchAdapterExpression({ sourceId:'twitch', sessionId:'owner:isolated', width:420 }));
+    // Native root/ancestor styles are applied by the first scheduled flush.
+    // Capture the enhancement baseline only after that existing work paints.
+    await waitForPaint(page);
     const appearance = () => page.evaluate(() => [nativeRoots[0], document.querySelector('.scroll')].map(node => {
       const css=getComputedStyle(node);return [css.fontFamily,css.fontSize,css.lineHeight,css.marginTop,css.paddingLeft,css.backgroundColor];
     }));
